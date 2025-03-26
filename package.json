@@ -1,10 +1,10 @@
 {
   "name": "@kajidog/mcp-sound-voicevox",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "description": "VOICEVOX integration for MCP - Text-to-Speech server using VOICEVOX engine",
-  "main": "dist/index.js",
+  "main": "./dist/index.js",
   "bin": {
-    "mcp-sound-voicevox": "./dist/index.js"
+    "mcp-sound-voicevox": "dist/index.js"
   },
   "type": "commonjs",
   "scripts": {

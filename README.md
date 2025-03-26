@@ -1,6 +1,7 @@
 # MCP Sound VOICEVOX
 
 VOICEVOXを使用して音声合成を行うModel Context Protocol (MCP) サーバーです。
+[VOICEVOX公式サイト](https://voicevox.hiroshiba.jp/)
 
 ## 概要
 
