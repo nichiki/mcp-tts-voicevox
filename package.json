@@ -1,6 +1,6 @@
 {
   "name": "@kajidog/mcp-sound-voicevox",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "VOICEVOX integration for MCP - Text-to-Speech server using VOICEVOX engine",
   "main": "./dist/index.js",
   "bin": {
@@ -22,11 +22,7 @@
   "keywords": [
     "voicevox",
     "tts",
-    "text-to-speech",
-    "mcp",
-    "model-context-protocol",
-    "voice-synthesis",
-    "japanese"
+    "mcp"
   ],
   "author": {
     "name": "kajidog",
