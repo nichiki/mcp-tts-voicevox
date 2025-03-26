@@ -23,13 +23,11 @@ export class VoicevoxPlayer {
   private prefetchSize: number = 2; // プリフェッチするアイテム数
 
   constructor(voicevoxUrl: string = "http://localhost:50021") {
-    console.log("VoicevoxPlayerを初期化中...");
     this.voicevoxUrl = voicevoxUrl;
   }
 
   // キューに追加
   public async enqueue(text: string, speaker: number = 1): Promise<void> {
-    console.log(`キューに追加: "${text}" (話者: ${speaker})`);
     const item = { text, speaker };
     this.queue.push(item);
     await this.generateAudio(item); // 音声データの生成を待つ
@@ -39,7 +37,6 @@ export class VoicevoxPlayer {
 
   // キューをクリア
   public clearQueue(): void {
-    console.log("キューをクリアします");
     this.queue = [];
   }
 
@@ -67,9 +64,6 @@ export class VoicevoxPlayer {
   private async generateAudio(item: QueueItem): Promise<void> {
     try {
       // 音声クエリを生成
-      console.log(
-        `音声クエリを生成中... テキスト: "${item.text}", 話者: ${item.speaker}`
-      );
       const queryResponse = await axios.post(
         `${this.voicevoxUrl}/audio_query?text=${encodeURIComponent(
           item.text
@@ -89,7 +83,6 @@ export class VoicevoxPlayer {
       const query = queryResponse.data;
 
       // 音声を合成
-      console.log(`音声を合成中... 話者: ${item.speaker}`);
       const synthesisResponse = await axios.post(
         `${this.voicevoxUrl}/synthesis?speaker=${item.speaker}`,
         query,
@@ -114,8 +107,6 @@ export class VoicevoxPlayer {
         await writeFile(tempFile, Buffer.from(item.audioData));
         item.tempFile = tempFile;
       }
-
-      console.log(`音声データを生成しました: ${item.text}`);
     } catch (error) {
       console.error("音声生成中にエラーが発生しました:", error);
       throw error;

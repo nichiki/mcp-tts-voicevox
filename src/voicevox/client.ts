@@ -4,7 +4,6 @@ export class VoicevoxClient {
   private voicevoxUrl: string;
 
   constructor(voicevoxUrl: string = "http://localhost:50021") {
-    console.log("VoicevoxClientを初期化中...");
     this.voicevoxUrl = voicevoxUrl;
   }
 
@@ -34,7 +33,6 @@ export class VoicevoxClient {
       }
 
       const query = await response.json();
-      console.log("音声クエリの生成が完了しました");
       return query;
     } catch (error) {
       console.error("音声クエリの生成中にエラーが発生しました:", error);
@@ -46,8 +44,6 @@ export class VoicevoxClient {
     query: any,
     speaker: number = 1
   ): Promise<ArrayBuffer> {
-    console.log(`音声を合成中... 話者: ${speaker}`);
-
     try {
       const response = await fetch(
         `${this.voicevoxUrl}/synthesis?speaker=${speaker}`,
@@ -68,7 +64,6 @@ export class VoicevoxClient {
       }
 
       const audioData = await response.arrayBuffer();
-      console.log("音声合成が完了しました");
       return audioData;
     } catch (error) {
       console.error("音声合成中にエラーが発生しました:", error);

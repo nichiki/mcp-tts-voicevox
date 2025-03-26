@@ -15,7 +15,6 @@ export class VoicevoxClient {
     this.validateConfig(config);
     this.defaultSpeaker = config.defaultSpeaker ?? 1;
     this.player = new VoicevoxPlayer(config.url);
-    console.log("VoicevoxClientを初期化しました");
   }
 
   /**
@@ -30,9 +29,6 @@ export class VoicevoxClient {
       const segments = this.splitText(text);
 
       for (const segment of segments) {
-        console.log(
-          `音声生成キューに追加: "${segment}" (話者ID: ${speakerId})`
-        );
         await this.player.enqueue(segment, speakerId);
       }
 
