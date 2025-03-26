@@ -7,7 +7,7 @@ import { VoicevoxClient } from "./voicevox/index.js";
 
 const server = new McpServer({
   name: "Sound Voicevox MCP",
-  version: "0.0.0",
+  version: "0.0.2",
   description: "Voicevoxで音声を生成します。",
 });
 

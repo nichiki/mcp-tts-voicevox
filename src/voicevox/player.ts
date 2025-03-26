@@ -1,11 +1,8 @@
 import { writeFile, unlink } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { exec } from "child_process";
-import { promisify } from "util";
 import axios from "axios";
 
-const execAsync = promisify(exec);
 const sound = require("sound-play");
 
 interface QueueItem {
@@ -128,8 +125,6 @@ export class VoicevoxPlayer {
         while (!item.audioData) {
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
-
-        console.log(`キューから再生: "${item.text}" (話者: ${item.speaker})`);
 
         // 音声を再生
         if (item.tempFile) {

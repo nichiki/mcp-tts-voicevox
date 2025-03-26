@@ -1,4 +1,3 @@
-import { VoicevoxGenerator } from "./generator";
 import { VoicevoxPlayer } from "./player";
 
 interface VoicevoxConfig {
