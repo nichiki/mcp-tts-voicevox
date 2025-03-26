@@ -1,0 +1,62 @@
+{
+  "name": "@kajidog/mcp-sound-voicevox",
+  "version": "1.0.0",
+  "description": "VOICEVOX integration for MCP - Text-to-Speech server using VOICEVOX engine",
+  "main": "dist/index.js",
+  "bin": {
+    "mcp-sound-voicevox": "./dist/index.js"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "test": "ts-node src/test.ts",
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm test"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "voicevox",
+    "tts",
+    "text-to-speech",
+    "mcp",
+    "model-context-protocol",
+    "voice-synthesis",
+    "japanese"
+  ],
+  "author": {
+    "name": "kajidog",
+    "email": "dev@kajidog.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kajidog/mcp-sound-voicevox.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kajidog/mcp-sound-voicevox/issues"
+  },
+  "homepage": "https://github.com/kajidog/mcp-sound-voicevox#readme",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "@types/play-sound": "^1.1.2",
+    "axios": "^1.8.4",
+    "node-fetch": "^2.6.7",
+    "node-wav": "^0.0.2",
+    "node-wav-player": "^1.0.0",
+    "play-sound": "^1.1.6",
+    "sound-play": "^1.1.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/node-fetch": "^2.6.11",
+    "cross-env": "^7.0.3",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  }
+}
