@@ -1,4 +1,4 @@
-# MCP Sound VOICEVOX
+# MCP TTS VOICEVOX
 
 VOICEVOXを使用した音声合成MCPサーバー
 
@@ -12,7 +12,7 @@ VOICEVOXを使用した音声合成MCPサーバー
 ### インストール
 
 ```bash
-npm install -g @kajidog/mcp-sound-voicevox
+npm install -g @kajidog/mcp-tts-voicevox
 ```
 
 ### 実行
@@ -21,7 +21,7 @@ npm install -g @kajidog/mcp-sound-voicevox
 2. 以下のコマンドを実行
 
 ```bash
-npx @kajidog/mcp-sound-voicevox
+npx @kajidog/mcp-tts-voicevox
 ```
 
 ### MCPツールとして使用
