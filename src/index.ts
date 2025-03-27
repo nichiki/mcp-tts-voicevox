@@ -6,7 +6,7 @@ import { z } from "zod";
 import { VoicevoxClient } from "./voicevox/index.js";
 
 const server = new McpServer({
-  name: "Sound Voicevox MCP",
+  name: "MCP TTS Voicevox",
   version: "0.0.2",
   description: "Voicevoxで音声を生成します。",
 });
