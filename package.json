@@ -1,10 +1,10 @@
 {
-  "name": "@kajidog/mcp-sound-voicevox",
+  "name": "@kajidog/mcp-tts-voicevox",
   "version": "0.0.2",
   "description": "VOICEVOX integration for MCP - Text-to-Speech server using VOICEVOX engine",
   "main": "./dist/index.js",
   "bin": {
-    "mcp-sound-voicevox": "dist/index.js"
+    "mcp-tts-voicevox": "dist/index.js"
   },
   "type": "commonjs",
   "scripts": {
@@ -30,12 +30,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kajidog/mcp-sound-voicevox.git"
+    "url": "git+https://github.com/kajidog/mcp-tts-voicevox.git"
   },
   "bugs": {
-    "url": "https://github.com/kajidog/mcp-sound-voicevox/issues"
+    "url": "https://github.com/kajidog/mcp-tts-voicevox/issues"
   },
-  "homepage": "https://github.com/kajidog/mcp-sound-voicevox#readme",
+  "homepage": "https://github.com/kajidog/mcp-tts-voicevox#readme",
   "license": "ISC",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",
