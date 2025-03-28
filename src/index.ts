@@ -7,8 +7,9 @@ import { VoicevoxClient } from "./voicevox/index.js";
 
 const server = new McpServer({
   name: "MCP TTS Voicevox",
-  version: "0.0.3",
-  description: "Voicevoxで音声を生成します。",
+  version: "0.0.4",
+  description:
+    "A Voicevox server that converts text to speech for playback and saving.",
 });
 
 // VoicevoxClientを一度だけインスタンス化
@@ -31,9 +32,10 @@ const handleError = (
 // テキストを音声に変換して再生
 server.tool(
   "speak",
+  "Convert text to speech and play it",
   {
-    text: z.string().describe("読み上げるテキスト"),
-    speaker: z.number().optional().describe("話者ID"),
+    text: z.string().describe("Text to be spoken"),
+    speaker: z.number().optional().describe("Speaker ID (optional)"),
   },
   async ({ text, speaker }) => {
     try {
@@ -50,9 +52,10 @@ server.tool(
 // クエリ生成ツール
 server.tool(
   "generate_query",
+  "Generate a query for voice synthesis",
   {
-    text: z.string().describe("音声合成するテキスト"),
-    speaker: z.number().optional().describe("話者ID"),
+    text: z.string().describe("Text for voice synthesis"),
+    speaker: z.number().optional().describe("Speaker ID (optional)"),
   },
   async ({ text, speaker }) => {
     try {
@@ -69,16 +72,17 @@ server.tool(
 // 音声ファイル生成ツール - クエリまたはテキストを受け付ける
 server.tool(
   "synthesize_file",
+  "Generate an audio file and return its absolute path",
   {
     text: z
       .string()
       .optional()
       .describe(
-        "音声合成するテキスト（queryパラメータと同時に指定する場合はqueryが優先されます）"
+        "Text for voice synthesis (if both query and text are provided, query takes precedence)"
       ),
-    query: z.any().optional().describe("音声合成用クエリ"),
-    output: z.string().describe("音声ファイルの保存先パス"),
-    speaker: z.number().optional().describe("話者ID"),
+    query: z.any().optional().describe("Voice synthesis query"),
+    output: z.string().describe("Output path for the audio file"),
+    speaker: z.number().optional().describe("Speaker ID (optional)"),
   },
   async ({ text, query, output, speaker }) => {
     try {
