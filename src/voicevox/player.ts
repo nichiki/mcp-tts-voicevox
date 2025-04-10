@@ -1,400 +1,243 @@
-import { writeFile, unlink } from "fs/promises";
-import { join } from "path";
+import { AudioQuery } from "./types";
+import { VoicevoxQueueManager, QueueEventType, QueueItemStatus } from "./queue";
+import { handleError } from "./error";
+import { VoicevoxApi } from "./api";
+import * as fsPromises from "fs/promises";
+import { dirname, join, extname, isAbsolute } from "path";
+import { stat } from "fs/promises";
+import { v4 as uuidv4 } from "uuid";
 import { tmpdir } from "os";
-import axios, { AxiosResponse, AxiosRequestConfig } from "axios";
-import { AudioQuery } from "./index";
 
-const sound = require("sound-play");
-
-interface QueueItem {
-  text: string;
-  speaker: number;
-  audioData?: ArrayBuffer;
-  tempFile?: string;
-  query?: AudioQuery;
-}
-
-interface VoicevoxError extends Error {
-  statusCode?: number;
-  response?: any;
-}
-
+/**
+ * VOICEVOX音声プレイヤークラス
+ * キュー管理システムを使用して音声の合成と再生を行う
+ */
 export class VoicevoxPlayer {
-  private voicevoxUrl: string;
-  private queue: QueueItem[] = [];
-  private isPlaying: boolean = false;
-  private isGenerating: boolean = false;
-  private prefetchSize: number = 2; // プリフェッチするアイテム数
+  private queueManager: VoicevoxQueueManager;
+  private api: VoicevoxApi; // APIインスタンスを保持
 
-  constructor(voicevoxUrl: string = "http://localhost:50021") {
-    this.voicevoxUrl = this.normalizeUrl(voicevoxUrl);
+  /**
+   * コンストラクタ
+   * @param voicevoxUrl VOICEVOX Engine API URL
+   * @param prefetchSize 事前生成するアイテム数
+   */
+  constructor(
+    voicevoxUrl: string = "http://localhost:50021",
+    prefetchSize: number = 2
+  ) {
+    // APIインスタンスを作成
+    this.api = new VoicevoxApi(voicevoxUrl);
+    // キューマネージャーにAPIインスタンスを注入
+    this.queueManager = new VoicevoxQueueManager(this.api, prefetchSize);
+
+    // デフォルトで再生を開始
+    this.queueManager.startPlayback();
+
+    // エラーイベントのログ記録
+    this.queueManager.addEventListener(QueueEventType.ERROR, (_, item) => {
+      if (item) {
+        console.error(
+          `音声合成エラー: ${item.text} (${
+            item.error?.message || "不明なエラー"
+          })`
+        );
+      }
+    });
   }
 
   /**
    * テキストをキューに追加
+   * @param text 合成するテキスト
+   * @param speaker 話者ID
    */
   public async enqueue(text: string, speaker: number = 1): Promise<void> {
     try {
-      const item = { text, speaker };
-      this.queue.push(item);
-      await this.generateAudio(item); // 音声データの生成を待つ
-      this.prefetchAudio(); // 次の音声の事前生成を開始
-      this.processQueue(); // 再生キューの処理を開始
+      await this.queueManager.enqueueText(text, speaker);
     } catch (error) {
-      this.handleError("キューへの追加中にエラーが発生しました", error);
+      handleError("キューへの追加中にエラーが発生しました", error);
     }
   }
 
   /**
    * クエリを使ってキューに追加
+   * @param query 音声合成用クエリ
+   * @param speaker 話者ID
    */
   public async enqueueWithQuery(
     query: AudioQuery,
     speaker: number = 1
   ): Promise<void> {
     try {
-      const item = { text: "クエリから生成", speaker, query };
-      this.queue.push(item);
-      await this.generateAudioFromQuery(item); // 音声データの生成を待つ
-      this.prefetchAudio(); // 次の音声の事前生成を開始
-      this.processQueue(); // 再生キューの処理を開始
+      await this.queueManager.enqueueQuery(query, speaker);
     } catch (error) {
-      this.handleError("クエリからの音声生成中にエラーが発生しました", error);
+      handleError("クエリからの音声生成中にエラーが発生しました", error);
     }
   }
 
   /**
    * テキストから音声合成用クエリを生成
+   * @param text 合成するテキスト
+   * @param speaker 話者ID
    */
   public async generateQuery(
     text: string,
     speaker: number = 1
   ): Promise<AudioQuery> {
     try {
-      const endpoint = `/audio_query?text=${encodeURIComponent(
-        text
-      )}&speaker=${speaker}`;
-      return await this.makeRequest<AudioQuery>("post", endpoint, null, {
-        "Content-Type": "application/json",
+      // 一時的にキューにテキストを追加してクエリを取得
+      const item = await this.queueManager.enqueueText(text, speaker);
+
+      // クエリが生成されるまで待機
+      const maxRetries = 40;
+      const retryInterval = 500;
+      let retryCount = 0;
+
+      return await new Promise<AudioQuery>((resolve, reject) => {
+        const checkQuery = () => {
+          const status = this.queueManager.getItemStatus(item.id);
+          const currentItem = this.queueManager
+            .getQueue()
+            .find((i) => i.id === item.id);
+
+          if (currentItem?.query) {
+            // クエリが取得できたらキューから削除して返す
+            const query = { ...currentItem.query };
+            this.queueManager.removeItem(item.id);
+            resolve(query);
+            return;
+          }
+
+          if (status === QueueItemStatus.ERROR) {
+            this.queueManager.removeItem(item.id);
+            reject(new Error("クエリの生成に失敗しました"));
+            return;
+          }
+
+          if (retryCount >= maxRetries) {
+            this.queueManager.removeItem(item.id);
+            reject(new Error("クエリの生成がタイムアウトしました"));
+            return;
+          }
+
+          retryCount++;
+          setTimeout(checkQuery, retryInterval);
+        };
+
+        checkQuery();
       });
     } catch (error) {
-      throw this.handleError("音声クエリ生成中にエラーが発生しました", error);
+      throw handleError("音声クエリ生成中にエラーが発生しました", error);
     }
   }
 
   /**
    * 音声合成用クエリから音声ファイルを生成
+   * @param query 音声合成用クエリ
+   * @param output 出力ファイルパスまたは出力ディレクトリ（省略時は一時ディレクトリに生成）
+   * @param speaker 話者ID
    */
   public async synthesizeToFile(
     query: AudioQuery,
-    output: string,
+    output?: string,
     speaker: number = 1
   ): Promise<string> {
     try {
-      // 音声を合成
-      const audioData = await this.makeRequest<ArrayBuffer>(
-        "post",
-        `/synthesis?speaker=${speaker}`,
-        query,
-        {
-          "Content-Type": "application/json",
-          Accept: "audio/wav",
-        },
-        "arraybuffer"
-      );
+      // クエリから直接音声を合成（キューを使わない）
+      const audioData = await this.api.synthesize(query, speaker);
 
-      // 出力パスが指定されていなければ一時ファイルを作成
-      const filePath = output || this.createTempFilePath();
-      await writeFile(filePath, Buffer.from(audioData));
+      // outputが未定義または空文字列の場合は、一時ディレクトリにファイルを作成
+      if (!output) {
+        const tempFilePath = this.createTempFilePath();
+        await fsPromises.writeFile(tempFilePath, Buffer.from(audioData));
+        return tempFilePath;
+      }
 
-      return filePath;
+      // 出力が実際にディレクトリかファイルパスか判断
+      let targetPath = output;
+      let isDir = false;
+
+      try {
+        const outputStat = await stat(output);
+        isDir = outputStat.isDirectory();
+      } catch (err) {
+        // ファイルまたはディレクトリが存在しない場合
+        // 末尾がスラッシュで終わる場合はディレクトリと見なす
+        isDir = output.endsWith("/") || output.endsWith("\\");
+      }
+
+      // ディレクトリの場合、ファイル名を生成
+      if (isDir) {
+        const filename = `voice-${uuidv4()}.wav`;
+        targetPath = join(output, filename);
+      }
+
+      // 出力ディレクトリが存在するか確認し、存在しない場合は作成
+      await fsPromises.mkdir(dirname(targetPath), { recursive: true });
+
+      // 音声データを指定された出力先に書き込み
+      await fsPromises.writeFile(targetPath, Buffer.from(audioData));
+
+      return targetPath;
     } catch (error) {
-      throw this.handleError("音声ファイル生成中にエラーが発生しました", error);
+      throw handleError("音声ファイル生成中にエラーが発生しました", error);
     }
+  }
+
+  /**
+   * 一時ファイルのパスを生成
+   * @returns 一時ファイルのパス
+   */
+  private createTempFilePath(): string {
+    const uniqueFilename = `voicevox-${uuidv4()}.wav`;
+    return join(tmpdir(), uniqueFilename);
   }
 
   /**
    * キューをクリア
    */
   public clearQueue(): void {
-    // 一時ファイルの削除処理を追加
-    this.queue.forEach((item) => {
-      if (item.tempFile) {
-        this.deleteTempFile(item.tempFile).catch(console.error);
-      }
-    });
-    this.queue = [];
+    this.queueManager.clearQueue();
   }
 
   /**
-   * APIリクエストを実行
-   * @private
+   * 再生を一時停止
    */
-  private async makeRequest<T>(
-    method: "get" | "post",
-    endpoint: string,
-    data: any = null,
-    headers: Record<string, string> = {},
-    responseType: "json" | "arraybuffer" = "json"
-  ): Promise<T> {
-    try {
-      const url = `${this.voicevoxUrl}${endpoint}`;
-      const config: AxiosRequestConfig = {
-        method,
-        url,
-        data,
-        headers,
-        responseType,
-        timeout: 30000, // 30秒タイムアウト
-      };
-
-      const response = await axios(config);
-
-      if (response.status !== 200) {
-        const error = new Error(
-          `APIリクエストに失敗しました: ${response.status}`
-        ) as VoicevoxError;
-        error.statusCode = response.status;
-        error.response = response.data;
-        throw error;
-      }
-
-      return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const voicevoxError = new Error(
-          `APIリクエストに失敗しました: ${error.message}`
-        ) as VoicevoxError;
-        voicevoxError.statusCode = error.response?.status;
-        voicevoxError.response = error.response?.data;
-        throw voicevoxError;
-      }
-      throw error;
-    }
+  public pausePlayback(): Promise<void> {
+    return this.queueManager.pausePlayback();
   }
 
   /**
-   * エラーハンドリング
-   * @private
+   * 再生を再開
    */
-  private handleError(message: string, error: unknown): never {
-    const errorDetails = error instanceof Error ? error.message : String(error);
-    console.error(`${message}: ${errorDetails}`, error);
-    throw new Error(`${message}: ${errorDetails}`);
+  public resumePlayback(): Promise<void> {
+    return this.queueManager.resumePlayback();
   }
 
   /**
-   * 音声の事前生成
-   * @private
+   * キュー内のアイテム数を取得
    */
-  private async prefetchAudio(): Promise<void> {
-    if (this.isGenerating) return;
-
-    this.isGenerating = true;
-    try {
-      // プリフェッチサイズまでの音声を生成
-      const itemsToGenerate = this.queue
-        .filter((item) => !item.audioData)
-        .slice(0, this.prefetchSize);
-
-      if (itemsToGenerate.length === 0) {
-        return;
-      }
-
-      await Promise.all(
-        itemsToGenerate.map((item) =>
-          item.query
-            ? this.generateAudioFromQuery(item)
-            : this.generateAudio(item)
-        )
-      );
-    } catch (error) {
-      console.error("音声の事前生成中にエラーが発生しました:", error);
-    } finally {
-      this.isGenerating = false;
-    }
+  public getQueueLength(): number {
+    return this.queueManager.getQueue().length;
   }
 
   /**
-   * クエリから音声生成処理
-   * @private
+   * イベントリスナーを追加
+   * キュー管理システムからのイベントを監視できるようにする
    */
-  private async generateAudioFromQuery(item: QueueItem): Promise<void> {
-    try {
-      if (!item.query) {
-        throw new Error("音声合成用クエリが指定されていません");
-      }
-
-      // 音声を合成
-      const audioData = await this.makeRequest<ArrayBuffer>(
-        "post",
-        `/synthesis?speaker=${item.speaker}`,
-        item.query,
-        {
-          "Content-Type": "application/json",
-          Accept: "audio/wav",
-        },
-        "arraybuffer"
-      );
-
-      // 音声データを保存
-      item.audioData = audioData;
-
-      // 一時ファイルに保存
-      if (item.audioData) {
-        const tempFile = this.createTempFilePath();
-        await writeFile(tempFile, Buffer.from(item.audioData));
-        item.tempFile = tempFile;
-      }
-    } catch (error) {
-      console.error("音声生成中にエラーが発生しました:", error);
-      throw error;
-    }
+  public addEventListener(
+    event: QueueEventType,
+    listener: (event: QueueEventType, item?: any) => void
+  ): void {
+    this.queueManager.addEventListener(event, listener);
   }
 
   /**
-   * 音声生成処理
-   * @private
+   * イベントリスナーを削除
    */
-  private async generateAudio(item: QueueItem): Promise<void> {
-    try {
-      // 音声クエリを生成
-      const query = await this.generateQuery(item.text, item.speaker);
-      item.query = query;
-
-      // クエリから音声を生成
-      await this.generateAudioFromQuery(item);
-    } catch (error) {
-      console.error("音声生成中にエラーが発生しました:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * キュー処理
-   * @private
-   */
-  private async processQueue(): Promise<void> {
-    if (this.isPlaying || this.queue.length === 0) {
-      return;
-    }
-
-    this.isPlaying = true;
-    try {
-      while (this.queue.length > 0) {
-        const item = this.queue[0];
-
-        // 音声データが生成されるまで待機
-        if (!item.tempFile) {
-          await this.waitForAudio(item);
-        }
-
-        if (item.tempFile) {
-          // 音声再生
-          await this.playAudio(item.tempFile);
-
-          // 再生後にキューから削除
-          this.queue.shift();
-
-          // 一時ファイルを削除
-          await this.deleteTempFile(item.tempFile);
-        } else {
-          // 音声生成に失敗した場合はスキップ
-          console.error("音声生成に失敗したためスキップします");
-          this.queue.shift();
-        }
-
-        // 次の音声のプリフェッチを開始
-        this.prefetchAudio();
-      }
-    } catch (error) {
-      console.error("音声再生中にエラーが発生しました:", error);
-    } finally {
-      this.isPlaying = false;
-    }
-  }
-
-  /**
-   * 音声再生
-   * @private
-   */
-  private async playAudio(filePath: string): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      try {
-        sound
-          .play(filePath)
-          .then(() => {
-            resolve();
-          })
-          .catch((error: Error) => {
-            console.error("音声再生中にエラーが発生しました:", error);
-            reject(error);
-          });
-      } catch (error) {
-        console.error("音声再生中にエラーが発生しました:", error);
-        reject(error);
-      }
-    });
-  }
-
-  /**
-   * 音声データが生成されるまで待機
-   * @private
-   */
-  private async waitForAudio(item: QueueItem): Promise<void> {
-    let retryCount = 0;
-    const maxRetry = 10;
-    const retryInterval = 500; // ms
-
-    return new Promise<void>((resolve, reject) => {
-      const checkAudio = () => {
-        if (item.tempFile) {
-          resolve();
-          return;
-        }
-
-        if (retryCount >= maxRetry) {
-          reject(new Error("音声データの生成がタイムアウトしました"));
-          return;
-        }
-
-        retryCount++;
-        setTimeout(checkAudio, retryInterval);
-      };
-
-      checkAudio();
-    });
-  }
-
-  /**
-   * 一時ファイルパスの生成
-   * @private
-   */
-  private createTempFilePath(): string {
-    return join(
-      tmpdir(),
-      `voicevox-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.wav`
-    );
-  }
-
-  /**
-   * 一時ファイルの削除
-   * @private
-   */
-  private async deleteTempFile(filePath: string): Promise<void> {
-    try {
-      await unlink(filePath);
-    } catch (error) {
-      console.error("一時ファイルの削除に失敗しました:", error);
-    }
-  }
-
-  /**
-   * URLの正規化
-   * @private
-   */
-  private normalizeUrl(url: string): string {
-    // 末尾のスラッシュを削除
-    return url.endsWith("/") ? url.slice(0, -1) : url;
+  public removeEventListener(
+    event: QueueEventType,
+    listener: (event: QueueEventType, item?: any) => void
+  ): void {
+    this.queueManager.removeEventListener(event, listener);
   }
 }

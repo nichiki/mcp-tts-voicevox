@@ -1,25 +1,19 @@
 import { VoicevoxPlayer } from "./player";
-
-// 共通の型定義
-export interface AudioQuery {
-  [key: string]: any;
-}
-
-interface VoicevoxConfig {
-  url: string;
-  defaultSpeaker?: number;
-  maxSegmentLength?: number;
-}
+import { AudioQuery, VoicevoxConfig } from "./types";
+import { splitText } from "./utils";
+import { handleError, formatError } from "./error";
 
 export class VoicevoxClient {
   private readonly player: VoicevoxPlayer;
   private readonly defaultSpeaker: number;
+  private readonly defaultSpeedScale: number;
   private readonly maxSegmentLength: number;
 
   constructor(config: VoicevoxConfig) {
     this.validateConfig(config);
     this.defaultSpeaker = config.defaultSpeaker ?? 1;
-    this.maxSegmentLength = config.maxSegmentLength ?? 150;
+    this.defaultSpeedScale = config.defaultSpeedScale ?? 1.0;
+    this.maxSegmentLength = 150;
     this.player = new VoicevoxPlayer(config.url);
   }
 
@@ -27,20 +21,28 @@ export class VoicevoxClient {
    * テキストを音声に変換して再生します
    * @param text 変換するテキスト
    * @param speaker 話者ID（オプション）
+   * @param speedScale 再生速度（オプション）
    * @returns 処理結果のメッセージ
    */
-  public async speak(text: string, speaker?: number): Promise<string> {
+  public async speak(
+    text: string,
+    speaker?: number,
+    speedScale?: number
+  ): Promise<string> {
     try {
       const speakerId = this.getSpeakerId(speaker);
-      const segments = this.splitText(text);
+      const speed = this.getSpeedScale(speedScale);
+      const segments = splitText(text, this.maxSegmentLength);
 
       for (const segment of segments) {
-        await this.player.enqueue(segment, speakerId);
+        const query = await this.player.generateQuery(segment, speakerId);
+        query.speedScale = speed;
+        await this.player.enqueueWithQuery(query, speakerId);
       }
 
       return `音声生成キューに追加しました: ${text}`;
     } catch (error) {
-      return this.handleError("音声生成中にエラーが発生しました", error);
+      return formatError("音声生成中にエラーが発生しました", error);
     }
   }
 
@@ -48,17 +50,21 @@ export class VoicevoxClient {
    * テキストから音声合成用クエリを生成します
    * @param text 変換するテキスト
    * @param speaker 話者ID（オプション）
+   * @param speedScale 再生速度（オプション）
    * @returns 音声合成用クエリ
    */
   public async generateQuery(
     text: string,
-    speaker?: number
+    speaker?: number,
+    speedScale?: number
   ): Promise<AudioQuery> {
     try {
       const speakerId = this.getSpeakerId(speaker);
-      return await this.player.generateQuery(text, speakerId);
+      const query = await this.player.generateQuery(text, speakerId);
+      query.speedScale = this.getSpeedScale(speedScale);
+      return query;
     } catch (error) {
-      throw this.handleError("クエリ生成中にエラーが発生しました", error);
+      throw handleError("クエリ生成中にエラーが発生しました", error);
     }
   }
 
@@ -67,35 +73,29 @@ export class VoicevoxClient {
    * @param textOrQuery テキストまたは音声合成用クエリ
    * @param outputPath 出力ファイルパス（オプション、省略時は一時ファイル）
    * @param speaker 話者ID（オプション）
+   * @param speedScale 再生速度（オプション）
    * @returns 生成した音声ファイルのパス
    */
   public async generateAudioFile(
     textOrQuery: string | AudioQuery,
     outputPath?: string,
-    speaker?: number
+    speaker?: number,
+    speedScale?: number
   ): Promise<string> {
     try {
       const speakerId = this.getSpeakerId(speaker);
+      const speed = this.getSpeedScale(speedScale);
 
-      // テキストかクエリかを判断
       if (typeof textOrQuery === "string") {
-        // テキストの場合は分割せずに直接クエリを生成
         const query = await this.generateQuery(textOrQuery, speakerId);
-        return await this.player.synthesizeToFile(
-          query,
-          outputPath ?? "",
-          speakerId
-        );
+        query.speedScale = speed;
+        return await this.player.synthesizeToFile(query, outputPath, speakerId);
       } else {
-        // クエリの場合はそのまま音声ファイルを生成
-        return await this.player.synthesizeToFile(
-          textOrQuery,
-          outputPath ?? "",
-          speakerId
-        );
+        const query = { ...textOrQuery, speedScale: speed };
+        return await this.player.synthesizeToFile(query, outputPath, speakerId);
       }
     } catch (error) {
-      throw this.handleError("音声ファイル生成中にエラーが発生しました", error);
+      throw handleError("音声ファイル生成中にエラーが発生しました", error);
     }
   }
 
@@ -103,42 +103,47 @@ export class VoicevoxClient {
    * テキストを音声ファイル生成キューに追加します
    * @param text テキスト
    * @param speaker 話者ID（オプション）
+   * @param speedScale 再生速度（オプション）
    * @returns 処理結果のメッセージ
    */
   public async enqueueAudioGeneration(
     text: string,
-    speaker?: number
+    speaker?: number,
+    speedScale?: number
   ): Promise<string>;
 
   /**
    * 音声合成用クエリを音声ファイル生成キューに追加します
    * @param query 音声合成用クエリ
    * @param speaker 話者ID（オプション）
+   * @param speedScale 再生速度（オプション）
    * @returns 処理結果のメッセージ
    */
   public async enqueueAudioGeneration(
     query: AudioQuery,
-    speaker?: number
+    speaker?: number,
+    speedScale?: number
   ): Promise<string>;
 
   // 実装
   public async enqueueAudioGeneration(
     textOrQuery: string | AudioQuery,
-    speaker?: number
+    speaker?: number,
+    speedScale?: number
   ): Promise<string> {
     try {
       const speakerId = this.getSpeakerId(speaker);
+      const speed = this.getSpeedScale(speedScale);
 
       if (typeof textOrQuery === "string") {
-        // テキストの場合
-        return await this.speak(textOrQuery, speakerId);
+        return await this.speak(textOrQuery, speakerId, speed);
       } else {
-        // クエリの場合
-        await this.player.enqueueWithQuery(textOrQuery, speakerId);
+        const query = { ...textOrQuery, speedScale: speed };
+        await this.player.enqueueWithQuery(query, speakerId);
         return "クエリをキューに追加しました";
       }
     } catch (error) {
-      return this.handleError("音声生成中にエラーが発生しました", error);
+      return formatError("音声生成中にエラーが発生しました", error);
     }
   }
 
@@ -151,95 +156,11 @@ export class VoicevoxClient {
   }
 
   /**
-   * エラーハンドリング
+   * 再生速度を取得（指定がない場合はデフォルト値を使用）
    * @private
    */
-  private handleError(message: string, error: unknown): never {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`${message}: ${errorMsg}`, error);
-    throw new Error(`${message}: ${errorMsg}`);
-  }
-
-  /**
-   * テキストを自然な区切りで分割します
-   * @param text 分割するテキスト
-   * @returns 分割されたテキストの配列
-   */
-  private splitText(text: string): string[] {
-    // 文の区切りとなるパターン
-    const sentenceEndings = /([。！？])/;
-    // 自然な区切りとなる接続詞や助詞
-    const naturalBreaks =
-      /([、しかし、でも、けれど、そして、また、または、それで、だから、ですから、そのため、したがって、ゆえに])/;
-
-    const segments: string[] = [];
-    let currentSegment = "";
-
-    // 文を句読点で分割
-    const sentences = text
-      .split(sentenceEndings)
-      .reduce((acc, part, i, arr) => {
-        if (i % 2 === 0) {
-          // テキスト部分
-          acc.push(part);
-        } else {
-          // 句読点部分 - 前のテキストと結合
-          acc[acc.length - 1] += part;
-        }
-        return acc;
-      }, [] as string[]);
-
-    // 文ごとに処理
-    for (const sentence of sentences) {
-      if (!sentence.trim()) continue;
-
-      // 現在のセグメントに追加してみる
-      const potentialSegment = currentSegment + sentence;
-
-      // 最大長を超えないならそのまま追加
-      if (potentialSegment.length <= this.maxSegmentLength) {
-        currentSegment = potentialSegment;
-      } else {
-        // 最大長を超える場合、naturalBreaksで分割を試みる
-        const parts = sentence.split(naturalBreaks);
-
-        // 分割パーツを処理
-        for (let i = 0; i < parts.length; i++) {
-          const part = parts[i];
-          if (!part.trim()) continue;
-
-          // 現在のセグメントに追加してみる
-          const newSegment = currentSegment + part;
-
-          // 最大長を超えるかチェック
-          if (newSegment.length <= this.maxSegmentLength) {
-            currentSegment = newSegment;
-          } else {
-            // 既存のセグメントがあれば保存
-            if (currentSegment.trim()) {
-              segments.push(currentSegment.trim());
-            }
-            currentSegment = part;
-          }
-        }
-      }
-
-      // 一文が終わったら保存判定
-      if (
-        currentSegment.length >= this.maxSegmentLength &&
-        currentSegment.trim()
-      ) {
-        segments.push(currentSegment.trim());
-        currentSegment = "";
-      }
-    }
-
-    // 残りのテキストがあれば追加
-    if (currentSegment.trim()) {
-      segments.push(currentSegment.trim());
-    }
-
-    return segments;
+  private getSpeedScale(speedScale?: number): number {
+    return speedScale ?? this.defaultSpeedScale;
   }
 
   private validateConfig(config: VoicevoxConfig): void {
@@ -253,3 +174,6 @@ export class VoicevoxClient {
     }
   }
 }
+
+// 型定義の再エクスポート
+export * from "./types";
