@@ -13,30 +13,35 @@ sequenceDiagram
     participant Client as MCP Client
     participant Server as McpServer (index.ts)
     participant VClient as VoicevoxClient (voicevox/index.ts)
-    participant QueueMgr as VoicevoxQueueManager (voicevox/queue/manager.ts)
+    participant QueueMgr as VoicevoxQueueManager (queue/manager.ts)
+    participant AudioGen as AudioGenerator (queue/audio-generator.ts)
     participant VApi as VoicevoxApi (voicevox/api.ts)
     participant Engine as VOICEVOX Engine
-    participant Player as VoicevoxPlayer (voicevox/player.ts)
+    participant AudioPlayer as AudioPlayer (queue/audio-player.ts)
 
     Client->>Server: invoke("speak", { text: "...", speaker: 1 })
     Server->>VClient: speak("...", 1)
-    VClient->>QueueMgr: addToQueue({ type: 'speak', text: "...", speaker: 1 })
+    VClient->>QueueMgr: enqueueText("...", 1)
+    QueueMgr->>AudioGen: generateQuery("...", 1)
+    AudioGen->>VApi: generateQuery("...", 1)
+    VApi->>Engine: POST /audio_query
+    Engine-->>VApi: AudioQuery JSON
+    VApi-->>AudioGen: AudioQuery
+    AudioGen-->>QueueMgr: AudioQuery
     QueueMgr-->>VClient: キュー追加完了
     VClient-->>Server: 成功応答
     Server-->>Client: 成功応答
 
-    Note over QueueMgr, Player: 以下は非同期で実行されるキュー処理
+    Note over QueueMgr, AudioPlayer: 以下は非同期で実行されるキュー処理
 
-    QueueMgr->>VApi: createAudioQuery("...", 1)
-    VApi->>Engine: POST /audio_query
-    Engine-->>VApi: AudioQuery JSON
-    VApi-->>QueueMgr: AudioQuery
-    QueueMgr->>VApi: synthesis(Query, 1)
+    QueueMgr->>AudioGen: generateAudioFromQuery(item, updateStatus)
+    AudioGen->>VApi: synthesize(Query, 1)
     VApi->>Engine: POST /synthesis
     Engine-->>VApi: WAV Audio Data
-    VApi-->>QueueMgr: Audio Data
-    QueueMgr->>Player: play(Audio Data)
-    Player->>System: 音声再生
+    VApi-->>AudioGen: Audio Data
+    AudioGen->>QueueMgr: Audio Data & Status Update (READY)
+    QueueMgr->>AudioPlayer: playAudio(tempFile)
+    AudioPlayer->>System: 音声再生
 ```
 
 ### `generate_query` ツールの呼び出し
@@ -70,31 +75,37 @@ sequenceDiagram
     participant Client as MCP Client
     participant Server as McpServer (index.ts)
     participant VClient as VoicevoxClient (voicevox/index.ts)
-    participant QueueMgr as VoicevoxQueueManager (voicevox/queue/manager.ts)
+    participant QueueMgr as VoicevoxQueueManager (queue/manager.ts)
+    participant AudioGen as AudioGenerator (queue/audio-generator.ts)
+    participant FileMgr as AudioFileManager (queue/file-manager.ts)
     participant VApi as VoicevoxApi (voicevox/api.ts)
     participant Engine as VOICEVOX Engine
-    participant Player as VoicevoxPlayer (voicevox/player.ts)
 
     Client->>Server: invoke("synthesize_file", { text: "...", output: "...", speaker: 1 })
     Server->>VClient: synthesizeFile({ text: "...", output: "...", speaker: 1 })
-    VClient->>QueueMgr: addToQueue({ type: 'save', text: "...", output: "...", speaker: 1 })
+    VClient->>QueueMgr: enqueueText("...", 1)
+    QueueMgr->>AudioGen: generateQuery("...", 1)
+    AudioGen->>VApi: generateQuery("...", 1)
+    VApi->>Engine: POST /audio_query
+    Engine-->>VApi: AudioQuery JSON
+    VApi-->>AudioGen: AudioQuery
+    AudioGen-->>QueueMgr: AudioQuery
     QueueMgr-->>VClient: キュー追加完了
     VClient-->>Server: 成功応答 (ファイルパスは後で通知される想定だが、現在の実装では即時応答)
     Server-->>Client: 成功応答 (ファイルパスは後で通知される想定だが、現在の実装では即時応答)
 
-    Note over QueueMgr, Player: 以下は非同期で実行されるキュー処理
+    Note over QueueMgr, FileMgr: 以下は非同期で実行されるキュー処理
 
-    QueueMgr->>VApi: createAudioQuery("...", 1)
-    VApi->>Engine: POST /audio_query
-    Engine-->>VApi: AudioQuery JSON
-    VApi-->>QueueMgr: AudioQuery
-    QueueMgr->>VApi: synthesis(Query, 1)
+    QueueMgr->>AudioGen: generateAudioFromQuery(item, updateStatus)
+    AudioGen->>VApi: synthesize(Query, 1)
     VApi->>Engine: POST /synthesis
     Engine-->>VApi: WAV Audio Data
-    VApi-->>QueueMgr: Audio Data
-    QueueMgr->>Player: save(Audio Data, "...")
-    Player->>FileSystem: ファイル書き込み
-    Player-->>QueueMgr: 保存完了 (ファイルパス)
+    VApi-->>AudioGen: Audio Data
+    AudioGen->>FileMgr: saveTempAudioFile(audioData)
+    FileMgr->>FileSystem: ファイル書き込み
+    FileMgr-->>AudioGen: tempFilePath
+    AudioGen-->>QueueMgr: tempFilePath & Status Update (READY)
+    Note over QueueMgr: 指定された出力パスにファイルをコピー
     Note over QueueMgr: 現在の実装では、ファイルパスの非同期通知は行われない
 ```
 
@@ -127,41 +138,91 @@ classDiagram
         -baseUrl: string
         -axiosInstance: AxiosInstance
         +constructor(baseUrl)
-        +createAudioQuery(text, speaker) Promise<any>
-        +synthesis(query, speaker) Promise<ArrayBuffer>
+        +generateQuery(text, speaker) Promise<AudioQuery>
+        +synthesize(query, speaker) Promise<ArrayBuffer>
         +getSpeakers() Promise<any[]>
         #handleError(error)
     }
 
     class VoicevoxQueueManager {
+        -queue: QueueItem[]
+        -isPlaying: boolean
+        -isPaused: boolean
+        -prefetchSize: number
+        -currentPlayingItem: QueueItem|null
         -api: VoicevoxApi
-        -player: VoicevoxPlayer
-        -queue: TaskQueueItem[]
-        -isProcessing: boolean
-        +constructor(api, player)
-        +addToQueue(task) void
+        -fileManager: AudioFileManager
+        -eventManager: EventManager
+        -audioGenerator: AudioGenerator
+        -audioPlayer: AudioPlayer
+        +constructor(api, prefetchSize)
+        +enqueueText(text, speaker) Promise<QueueItem>
+        +enqueueQuery(query, speaker) Promise<QueueItem>
+        +removeItem(itemId) Promise<boolean>
+        +clearQueue() Promise<void>
+        +startPlayback() Promise<void>
+        +pausePlayback() Promise<void>
+        +resumePlayback() Promise<void>
+        +playNext() Promise<void>
+        +addEventListener(event, listener) void
+        +removeEventListener(event, listener) void
+        +getQueue() QueueItem[]
+        +getItemStatus(itemId) QueueItemStatus|null
+        +saveTempAudioFile(audioData) Promise<string>
         -processQueue() Promise<void>
-        -executeTask(task) Promise<void>
+        -prefetchAudio() Promise<void>
+        -updateItemStatus(item, status) void
+        -playAudio(filePath) Promise<void>
     }
 
-    class VoicevoxPlayer {
-        +play(audioBuffer) Promise<void>
-        +save(audioBuffer, outputPath) Promise<string>
+    class AudioGenerator {
+        -api: VoicevoxApi
+        -fileManager: AudioFileManager
+        +constructor(api, fileManager)
+        +generateQuery(text, speaker) Promise<AudioQuery>
+        +generateAudio(item, updateStatus) Promise<void>
+        +generateAudioFromQuery(item, updateStatus) Promise<void>
     }
 
-    class TaskQueueItem {
-        type: 'speak' | 'save'
-        text?: string
-        query?: any
+    class AudioFileManager {
+        +createTempFilePath() string
+        +deleteTempFile(filePath) Promise<void>
+        +saveTempAudioFile(audioData) Promise<string>
+    }
+
+    class AudioPlayer {
+        +playAudio(filePath) Promise<void>
+        +logError(message, error) void
+    }
+
+    class EventManager {
+        -eventListeners: Map<QueueEventType, QueueEventListener[]>
+        +constructor()
+        +addEventListener(event, listener) void
+        +removeEventListener(event, listener) void
+        +emitEvent(event, item?) void
+    }
+
+    class QueueItem {
+        id: string
+        text: string
         speaker: number
-        output?: string
+        status: QueueItemStatus
+        createdAt: Date
+        audioData?: ArrayBuffer
+        tempFile?: string
+        query?: AudioQuery
+        error?: Error
     }
 
     McpServer --> VoicevoxClient : uses
     VoicevoxClient --> VoicevoxApi : uses
     VoicevoxClient --> VoicevoxQueueManager : uses
     VoicevoxQueueManager --> VoicevoxApi : uses
-    VoicevoxQueueManager --> VoicevoxPlayer : uses
-    VoicevoxQueueManager --> TaskQueueItem : manages
-
-```
+    VoicevoxQueueManager --> AudioFileManager : uses
+    VoicevoxQueueManager --> EventManager : uses
+    VoicevoxQueueManager --> AudioGenerator : uses
+    VoicevoxQueueManager --> AudioPlayer : uses
+    VoicevoxQueueManager --> QueueItem : manages
+    AudioGenerator --> VoicevoxApi : uses
+    AudioGenerator --> AudioFileManager : uses
