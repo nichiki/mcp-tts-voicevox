@@ -1,5 +1,5 @@
 import axios, { AxiosRequestConfig } from "axios";
-import { AudioQuery, VoicevoxError, Score, FrameAudioQuery } from "./types";
+import { AudioQuery, VoicevoxError } from "./types";
 import { handleError } from "./error";
 
 export class VoicevoxApi {

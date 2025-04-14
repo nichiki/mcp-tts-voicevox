@@ -1,8 +1,9 @@
 {
   "name": "@kajidog/mcp-tts-voicevox",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "VOICEVOX integration for MCP - Text-to-Speech server using VOICEVOX engine",
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "bin": {
     "mcp-tts-voicevox": "dist/index.js"
   },

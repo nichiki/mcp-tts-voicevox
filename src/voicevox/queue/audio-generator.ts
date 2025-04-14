@@ -2,7 +2,6 @@ import { VoicevoxApi } from "../api";
 import { AudioQuery } from "../types";
 import { QueueItem, QueueItemStatus } from "./types";
 import { AudioFileManager } from "./file-manager";
-import { isTestEnvironment } from "../utils";
 
 /**
  * 音声生成クラス

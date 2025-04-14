@@ -1,17 +1,7 @@
 import { AudioQuery } from "./types";
-import {
-  VoicevoxQueueManager,
-  QueueEventType,
-  QueueItemStatus,
-  QueueEventListener,
-} from "./queue";
+import { VoicevoxQueueManager, QueueEventType, QueueItemStatus } from "./queue";
 import { handleError } from "./error";
 import { VoicevoxApi } from "./api";
-import * as fsPromises from "fs/promises";
-import { dirname, join, extname, isAbsolute } from "path";
-import { stat } from "fs/promises";
-import { v4 as uuidv4 } from "uuid";
-import { tmpdir } from "os";
 
 /**
  * エラーハンドラープロキシ

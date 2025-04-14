@@ -1,5 +1,3 @@
-import { AxiosError } from "axios";
-
 /**
  * VOICEVOXクライアントの設定オブジェクト
  */
