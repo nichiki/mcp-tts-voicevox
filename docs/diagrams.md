@@ -13,10 +13,9 @@ sequenceDiagram
     participant Client as MCP Client
     participant Server as McpServer (index.ts)
     participant VClient as VoicevoxClient (voicevox/index.ts)
-    participant VPlayer as VoicevoxPlayer (voicevox/player.ts)
+    participant VApi as VoicevoxApi (voicevox/api.ts)
     participant QueueMgr as VoicevoxQueueManager (queue/manager.ts)
     participant AudioGen as AudioGenerator (queue/audio-generator.ts)
-    participant VApi as VoicevoxApi (voicevox/api.ts)
     participant Engine as VOICEVOX Engine
     participant AudioPlayer as AudioPlayer (queue/audio-player.ts)
     participant FileManager as AudioFileManager (queue/file-manager.ts)
@@ -26,17 +25,13 @@ sequenceDiagram
     
     Note over VClient: テキストをsplitText()で分割
     
-    VClient->>VPlayer: generateQuery("segment", 1)
-    VPlayer->>VApi: generateQuery("segment", 1)
+    VClient->>VApi: generateQuery("segment", 1)
     VApi->>Engine: POST /audio_query
     Engine-->>VApi: AudioQuery JSON
-    VApi-->>VPlayer: AudioQuery
-    VPlayer-->>VClient: AudioQuery
+    VApi-->>VClient: AudioQuery
     
-    VClient->>VPlayer: enqueueWithQuery(query, 1)
-    VPlayer->>QueueMgr: enqueueQuery(query, 1)
-    QueueMgr-->>VPlayer: キュー追加完了
-    VPlayer-->>VClient: 成功応答
+    VClient->>QueueMgr: enqueueQuery(query, 1)
+    QueueMgr-->>VClient: キュー追加完了
     VClient-->>Server: 成功応答
     Server-->>Client: { content: [{ type: "text", text: "音声生成キューに追加しました: ..." }] }
 
@@ -65,18 +60,15 @@ sequenceDiagram
     participant Client as MCP Client
     participant Server as McpServer (index.ts)
     participant VClient as VoicevoxClient (voicevox/index.ts)
-    participant VPlayer as VoicevoxPlayer (voicevox/player.ts)
     participant VApi as VoicevoxApi (voicevox/api.ts)
     participant Engine as VOICEVOX Engine
 
     Client->>Server: invoke("generate_query", { text: "...", speaker: 1 })
     Server->>VClient: generateQuery("...", 1)
-    VClient->>VPlayer: generateQuery("...", 1)
-    VPlayer->>VApi: generateQuery("...", 1)
+    VClient->>VApi: generateQuery("...", 1)
     VApi->>Engine: POST /audio_query
     Engine-->>VApi: AudioQuery JSON
-    VApi-->>VPlayer: AudioQuery
-    VPlayer-->>VClient: AudioQuery
+    VApi-->>VClient: AudioQuery
     VClient-->>Server: AudioQuery (JSON String)
     Server-->>Client: { content: [{ type: "text", text: "AudioQuery JSON" }] }
 ```
@@ -90,30 +82,25 @@ sequenceDiagram
     participant Client as MCP Client
     participant Server as McpServer (index.ts)
     participant VClient as VoicevoxClient (voicevox/index.ts)
-    participant VPlayer as VoicevoxPlayer (voicevox/player.ts)
     participant VApi as VoicevoxApi (voicevox/api.ts)
     participant Engine as VOICEVOX Engine
     participant FileManager as AudioFileManager (queue/file-manager.ts)
 
     Client->>Server: invoke("synthesize_file", { text: "...", output: "...", speaker: 1 })
     Server->>VClient: generateAudioFile("...", "...", 1)
-    VClient->>VPlayer: generateQuery("...", 1)
-    VPlayer->>VApi: generateQuery("...", 1)
+    VClient->>VApi: generateQuery("...", 1)
     VApi->>Engine: POST /audio_query
     Engine-->>VApi: AudioQuery JSON
-    VApi-->>VPlayer: AudioQuery
-    VPlayer-->>VClient: AudioQuery
+    VApi-->>VClient: AudioQuery
     
-    VClient->>VPlayer: synthesizeToFile(query, output, 1)
-    VPlayer->>VApi: synthesize(query, 1)
+    VClient->>VApi: synthesize(query, 1)
     VApi->>Engine: POST /synthesis
     Engine-->>VApi: WAV Audio Data
-    VApi-->>VPlayer: Audio Data
+    VApi-->>VClient: Audio Data
     
-    VPlayer->>FileManager: saveTempAudioFile(audioData)
-    FileManager-->>VPlayer: filePath
+    VClient->>FileManager: saveTempAudioFile(audioData)
+    FileManager-->>VClient: filePath
     
-    VPlayer-->>VClient: filePath
     VClient-->>Server: filePath
     Server-->>Client: { content: [{ type: "text", text: "filePath" }] }
 ```
@@ -127,7 +114,6 @@ sequenceDiagram
     participant Client as MCP Client
     participant Server as McpServer (index.ts)
     participant VClient as VoicevoxClient (voicevox/index.ts)
-    participant VPlayer as VoicevoxPlayer (voicevox/player.ts)
     participant VApi as VoicevoxApi (voicevox/api.ts)
     participant Engine as VOICEVOX Engine
     participant FileManager as AudioFileManager (queue/file-manager.ts)
@@ -135,16 +121,14 @@ sequenceDiagram
     Client->>Server: invoke("synthesize_file", { query: "...(JSON)", output: "...", speaker: 1 })
     Server->>VClient: generateAudioFile(query, "...", 1)
     
-    VClient->>VPlayer: synthesizeToFile(query, output, 1)
-    VPlayer->>VApi: synthesize(query, 1)
+    VClient->>VApi: synthesize(query, 1)
     VApi->>Engine: POST /synthesis
     Engine-->>VApi: WAV Audio Data
-    VApi-->>VPlayer: Audio Data
+    VApi-->>VClient: Audio Data
     
-    VPlayer->>FileManager: saveTempAudioFile(audioData)
-    FileManager-->>VPlayer: filePath
+    VClient->>FileManager: saveTempAudioFile(audioData)
+    FileManager-->>VClient: filePath
     
-    VPlayer-->>VClient: filePath
     VClient-->>Server: filePath
     Server-->>Client: { content: [{ type: "text", text: "filePath" }] }
 ```
@@ -166,6 +150,7 @@ classDiagram
 
     class VoicevoxClient {
         -player: VoicevoxPlayer
+        -api: VoicevoxApi
         -defaultSpeaker: number
         -defaultSpeedScale: number
         -maxSegmentLength: number
@@ -190,18 +175,18 @@ classDiagram
 
     class VoicevoxPlayer {
         -queueManager: VoicevoxQueueManager
-        -api: VoicevoxApi
         +constructor(voicevoxUrl, prefetchSize)
         +enqueue(text, speaker) Promise~void~
         +enqueueWithQuery(query, speaker) Promise~void~
         +generateQuery(text, speaker) Promise~AudioQuery~
         +synthesizeToFile(query, output, speaker) Promise~string~
-        +clearQueue() void
-        +pausePlayback() Promise~void~
-        +resumePlayback() Promise~void~
+        +startPlayback() void
+        +pausePlayback() void
+        +resumePlayback() void
         +getQueueLength() number
-        +addEventListener(event, listener) void
-        +removeEventListener(event, listener) void
+        +isQueueEmpty() boolean
+        +isPlaying() boolean
+        +getQueueManager() VoicevoxQueueManager
     }
 
     class VoicevoxQueueManager {
@@ -229,10 +214,12 @@ classDiagram
         +getQueue() QueueItem[]
         +getItemStatus(itemId) QueueItemStatus|null
         +saveTempAudioFile(audioData) Promise~string~
+        +getAudioGenerator() AudioGenerator
+        +getFileManager() AudioFileManager
+        +getApi() VoicevoxApi
         -processQueue() Promise~void~
         -prefetchAudio() Promise~void~
         -updateItemStatus(item, status) void
-        -playAudio(filePath) Promise~void~
     }
 
     class AudioGenerator {
@@ -248,6 +235,7 @@ classDiagram
         +createTempFilePath() string
         +deleteTempFile(filePath) Promise~void~
         +saveTempAudioFile(audioData) Promise~string~
+        +saveAudioFile(audioData, output) Promise~string~
     }
 
     class AudioPlayer {
@@ -277,8 +265,8 @@ classDiagram
 
     McpServer --> VoicevoxClient : uses
     VoicevoxClient --> VoicevoxPlayer : uses
-    VoicevoxPlayer --> VoicevoxApi : uses
-    VoicevoxPlayer --> VoicevoxQueueManager : uses
+    VoicevoxClient --> VoicevoxApi : uses directly
+    VoicevoxPlayer --> VoicevoxQueueManager : manages
     VoicevoxQueueManager --> VoicevoxApi : uses
     VoicevoxQueueManager --> AudioFileManager : uses
     VoicevoxQueueManager --> EventManager : uses
