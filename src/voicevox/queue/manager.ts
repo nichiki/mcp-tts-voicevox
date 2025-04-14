@@ -13,10 +13,6 @@ import { EventManager } from "./event-manager";
 import { AudioGenerator } from "./audio-generator";
 import { AudioPlayer } from "./audio-player";
 
-// テスト環境かどうかを判定
-const isTestEnvironment =
-  process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
-
 /**
  * VOICEVOXキュー管理クラス
  * 音声合成タスクのキュー管理と実行を担当
@@ -55,8 +51,42 @@ export class VoicevoxQueueManager implements QueueManager {
    * キューに新しいテキストを追加
    */
   async enqueueText(text: string, speaker: number): Promise<QueueItem> {
-    const query = await this.audioGenerator.generateQuery(text, speaker);
-    return this.enqueueQuery(query, speaker);
+    const item: QueueItem = {
+      id: uuidv4(),
+      text: text,
+      speaker,
+      status: QueueItemStatus.PENDING,
+      createdAt: new Date(),
+    };
+
+    this.queue.push(item);
+    this.eventManager.emitEvent(QueueEventType.ITEM_ADDED, item);
+
+    try {
+      // 非同期で音声生成を開始
+      this.updateItemStatus(item, QueueItemStatus.GENERATING);
+      const query = await this.audioGenerator.generateQuery(text, speaker);
+      item.query = query;
+      await this.audioGenerator.generateAudioFromQuery(
+        item,
+        this.updateItemStatus.bind(this)
+      );
+      return item;
+    } catch (error) {
+      // エラー発生時の処理
+      item.error = error instanceof Error ? error : new Error(String(error));
+      this.updateItemStatus(item, QueueItemStatus.ERROR);
+      this.eventManager.emitEvent(QueueEventType.ERROR, item);
+
+      // エラー発生時はキューからアイテムを削除
+      const itemIndex = this.queue.findIndex((i) => i.id === item.id);
+      if (itemIndex !== -1) {
+        this.queue.splice(itemIndex, 1);
+      }
+      this.eventManager.emitEvent(QueueEventType.ITEM_REMOVED, item);
+
+      throw error; // エラーを再スロー
+    }
   }
 
   /**
@@ -193,47 +223,8 @@ export class VoicevoxQueueManager implements QueueManager {
     }
     this.isPaused = false;
 
-    // 既に再生中のアイテムがあれば何もしない
-    if (this.currentPlayingItem) {
-      return;
-    }
-
-    const readyItem = this.queue.find(
-      (item) => item.status === QueueItemStatus.READY
-    );
-
-    if (readyItem && readyItem.tempFile) {
-      this.currentPlayingItem = readyItem;
-      this.updateItemStatus(readyItem, QueueItemStatus.PLAYING);
-      this.eventManager.emitEvent(QueueEventType.PLAYBACK_STARTED);
-
-      try {
-        await this.playAudio(readyItem.tempFile);
-
-        // 再生完了
-        this.updateItemStatus(readyItem, QueueItemStatus.DONE);
-        this.currentPlayingItem = null;
-
-        // 完了したアイテムをキューから削除
-        await this.removeItem(readyItem.id);
-
-        // 再生完了イベント発火
-        this.eventManager.emitEvent(QueueEventType.PLAYBACK_COMPLETED);
-      } catch (error) {
-        // 再生エラー時の処理
-        this.audioPlayer.logError(
-          `音声ファイル再生エラー: ${readyItem.text}`,
-          error
-        );
-        readyItem.error =
-          error instanceof Error ? error : new Error(String(error));
-        this.updateItemStatus(readyItem, QueueItemStatus.ERROR);
-        this.eventManager.emitEvent(QueueEventType.ERROR, readyItem);
-        // エラーになったアイテムもキューから削除
-        await this.removeItem(readyItem.id);
-        this.currentPlayingItem = null;
-      }
-    }
+    // キュー処理を開始
+    this.processQueue();
   }
   // --- 再生制御ここまで ---
 
@@ -274,58 +265,88 @@ export class VoicevoxQueueManager implements QueueManager {
   }
 
   /**
-   * キュー内のアイテムを処理 (再生処理のメインループ)
-   * @private
+   * キュー処理実行
+   * キューにある音声の生成と再生を処理
    */
   private async processQueue(): Promise<void> {
-    if (!this.isPlaying || this.isPaused || this.currentPlayingItem) {
+    // 再生を停止中またはポーズ中は何もしない
+    if (!this.isPlaying || this.isPaused) {
       return;
     }
 
-    const readyItem = this.queue.find(
+    // 現在再生中のアイテムがあれば再生中のまま
+    if (this.currentPlayingItem?.status === QueueItemStatus.PLAYING) {
+      return;
+    }
+
+    // 前回再生したアイテムの後処理
+    if (
+      this.currentPlayingItem &&
+      this.currentPlayingItem.status === QueueItemStatus.DONE
+    ) {
+      // 再生完了したアイテムの一時ファイルを削除
+      if (this.currentPlayingItem.tempFile) {
+        await this.fileManager.deleteTempFile(this.currentPlayingItem.tempFile);
+        this.currentPlayingItem.tempFile = undefined; // 削除後に参照を消す
+      }
+
+      this.currentPlayingItem = null;
+    }
+
+    // 再生可能なアイテムを探す
+    const nextItem = this.queue.find(
       (item) => item.status === QueueItemStatus.READY
     );
 
-    if (!readyItem || !readyItem.tempFile) {
-      // 再生可能なアイテムがない場合、または一時ファイルがない場合は待機
-      setTimeout(() => this.processQueue(), 100);
+    if (!nextItem) {
+      // 再生可能なアイテムがなければ、事前生成を開始して終了
+      this.prefetchAudio();
       return;
     }
 
+    this.currentPlayingItem = nextItem;
+    this.updateItemStatus(nextItem, QueueItemStatus.PLAYING);
+
     try {
-      this.currentPlayingItem = readyItem;
-      this.updateItemStatus(readyItem, QueueItemStatus.PLAYING);
+      if (!nextItem.tempFile) {
+        throw new Error("再生対象の一時ファイルが見つかりません");
+      }
 
-      await this.playAudio(readyItem.tempFile);
+      await this.audioPlayer.playAudio(nextItem.tempFile);
 
-      // 再生完了後
-      this.updateItemStatus(readyItem, QueueItemStatus.DONE);
+      // 再生完了
+      this.updateItemStatus(nextItem, QueueItemStatus.DONE);
+      this.eventManager.emitEvent(QueueEventType.ITEM_COMPLETED, nextItem);
+
+      // キューから削除
+      const itemIndex = this.queue.findIndex((i) => i.id === nextItem.id);
+      if (itemIndex !== -1) {
+        this.queue.splice(itemIndex, 1);
+      }
+
+      // 続けて次のアイテムを再生
       this.currentPlayingItem = null;
-
-      // 完了したアイテムをキューから削除
-      await this.removeItem(readyItem.id);
-
-      // PLAYBACK_COMPLETEDイベントを発火
-      this.eventManager.emitEvent(QueueEventType.PLAYBACK_COMPLETED);
-
-      // 次のアイテム処理を試みる
       this.processQueue();
     } catch (error) {
-      // 再生エラー時の処理
-      this.audioPlayer.logError(
-        `音声ファイル再生エラー: ${readyItem.text}`,
-        error
-      );
-      readyItem.error =
+      console.error(`Error playing audio:`, error);
+      this.updateItemStatus(nextItem, QueueItemStatus.ERROR);
+      nextItem.error =
         error instanceof Error ? error : new Error(String(error));
-      this.updateItemStatus(readyItem, QueueItemStatus.ERROR);
-      this.eventManager.emitEvent(QueueEventType.ERROR, readyItem);
-      // エラーになったアイテムもキューから削除
-      await this.removeItem(readyItem.id);
-      this.currentPlayingItem = null; // 再生中アイテムをリセット
-      // 次の処理へ
+      this.eventManager.emitEvent(QueueEventType.ERROR, nextItem);
+
+      // エラー発生時もキューからアイテムを削除
+      const itemIndex = this.queue.findIndex((i) => i.id === nextItem.id);
+      if (itemIndex !== -1) {
+        this.queue.splice(itemIndex, 1);
+      }
+
+      // エラー発生時でも次のアイテムを再生
+      this.currentPlayingItem = null;
       this.processQueue();
     }
+
+    // 次回の音声を事前生成
+    this.prefetchAudio();
   }
 
   /**
@@ -382,21 +403,35 @@ export class VoicevoxQueueManager implements QueueManager {
   }
 
   /**
-   * 音声ファイルを再生
-   * テスト互換性を保つための内部メソッド
-   * @param filePath 再生する音声ファイルのパス
-   * @private
-   */
-  private async playAudio(filePath: string): Promise<void> {
-    return this.audioPlayer.playAudio(filePath);
-  }
-
-  /**
    * バイナリーデータを一時ファイルに保存
    * @param audioData 音声バイナリーデータ
    * @returns 保存した一時ファイルのパス
    */
   public async saveTempAudioFile(audioData: ArrayBuffer): Promise<string> {
     return this.fileManager.saveTempAudioFile(audioData);
+  }
+
+  /**
+   * AudioGeneratorインスタンスを取得
+   * @returns AudioGeneratorインスタンス
+   */
+  public getAudioGenerator(): AudioGenerator {
+    return this.audioGenerator;
+  }
+
+  /**
+   * FileManagerインスタンスを取得
+   * @returns AudioFileManagerインスタンス
+   */
+  public getFileManager(): AudioFileManager {
+    return this.fileManager;
+  }
+
+  /**
+   * API インスタンスを取得
+   * @returns VoicevoxApi インスタンス
+   */
+  public getApi(): VoicevoxApi {
+    return this.api;
   }
 }

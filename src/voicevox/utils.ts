@@ -75,3 +75,13 @@ export function splitText(text: string, maxLength: number): string[] {
 
   return segments;
 }
+
+/**
+ * テスト環境かどうかを判定します
+ * @returns テスト環境の場合はtrue、それ以外の場合はfalse
+ */
+export function isTestEnvironment(): boolean {
+  return (
+    process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined
+  );
+}

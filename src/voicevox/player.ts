@@ -1,5 +1,10 @@
 import { AudioQuery } from "./types";
-import { VoicevoxQueueManager, QueueEventType, QueueItemStatus } from "./queue";
+import {
+  VoicevoxQueueManager,
+  QueueEventType,
+  QueueItemStatus,
+  QueueEventListener,
+} from "./queue";
 import { handleError } from "./error";
 import { VoicevoxApi } from "./api";
 import * as fsPromises from "fs/promises";
@@ -9,12 +14,24 @@ import { v4 as uuidv4 } from "uuid";
 import { tmpdir } from "os";
 
 /**
+ * エラーハンドラープロキシ
+ * メソッドをエラーハンドリングで包む高階関数
+ */
+function withErrorHandling<R>(
+  method: () => Promise<R>,
+  errorMessage: string
+): Promise<R> {
+  return method().catch((error) => {
+    throw handleError(errorMessage, error);
+  });
+}
+
+/**
  * VOICEVOX音声プレイヤークラス
  * キュー管理システムを使用して音声の合成と再生を行う
  */
 export class VoicevoxPlayer {
   private queueManager: VoicevoxQueueManager;
-  private api: VoicevoxApi; // APIインスタンスを保持
 
   /**
    * コンストラクタ
@@ -26,9 +43,9 @@ export class VoicevoxPlayer {
     prefetchSize: number = 2
   ) {
     // APIインスタンスを作成
-    this.api = new VoicevoxApi(voicevoxUrl);
+    const api = new VoicevoxApi(voicevoxUrl);
     // キューマネージャーにAPIインスタンスを注入
-    this.queueManager = new VoicevoxQueueManager(this.api, prefetchSize);
+    this.queueManager = new VoicevoxQueueManager(api, prefetchSize);
 
     // デフォルトで再生を開始
     this.queueManager.startPlayback();
@@ -51,11 +68,9 @@ export class VoicevoxPlayer {
    * @param speaker 話者ID
    */
   public async enqueue(text: string, speaker: number = 1): Promise<void> {
-    try {
+    return withErrorHandling(async () => {
       await this.queueManager.enqueueText(text, speaker);
-    } catch (error) {
-      handleError("キューへの追加中にエラーが発生しました", error);
-    }
+    }, "テキストのキュー追加中にエラーが発生しました");
   }
 
   /**
@@ -67,15 +82,14 @@ export class VoicevoxPlayer {
     query: AudioQuery,
     speaker: number = 1
   ): Promise<void> {
-    try {
+    return withErrorHandling(async () => {
       await this.queueManager.enqueueQuery(query, speaker);
-    } catch (error) {
-      handleError("クエリからの音声生成中にエラーが発生しました", error);
-    }
+    }, "クエリのキュー追加中にエラーが発生しました");
   }
 
   /**
    * テキストから音声合成用クエリを生成
+   * キューマネージャーの内部機能を使用
    * @param text 合成するテキスト
    * @param speaker 話者ID
    */
@@ -83,55 +97,18 @@ export class VoicevoxPlayer {
     text: string,
     speaker: number = 1
   ): Promise<AudioQuery> {
-    try {
-      // 一時的にキューにテキストを追加してクエリを取得
-      const item = await this.queueManager.enqueueText(text, speaker);
-
-      // クエリが生成されるまで待機
-      const maxRetries = 40;
-      const retryInterval = 500;
-      let retryCount = 0;
-
-      return await new Promise<AudioQuery>((resolve, reject) => {
-        const checkQuery = () => {
-          const status = this.queueManager.getItemStatus(item.id);
-          const currentItem = this.queueManager
-            .getQueue()
-            .find((i) => i.id === item.id);
-
-          if (currentItem?.query) {
-            // クエリが取得できたらキューから削除して返す
-            const query = { ...currentItem.query };
-            this.queueManager.removeItem(item.id);
-            resolve(query);
-            return;
-          }
-
-          if (status === QueueItemStatus.ERROR) {
-            this.queueManager.removeItem(item.id);
-            reject(new Error("クエリの生成に失敗しました"));
-            return;
-          }
-
-          if (retryCount >= maxRetries) {
-            this.queueManager.removeItem(item.id);
-            reject(new Error("クエリの生成がタイムアウトしました"));
-            return;
-          }
-
-          retryCount++;
-          setTimeout(checkQuery, retryInterval);
-        };
-
-        checkQuery();
-      });
-    } catch (error) {
-      throw handleError("音声クエリ生成中にエラーが発生しました", error);
-    }
+    return withErrorHandling(async () => {
+      // AudioGeneratorのgenerateQueryを直接呼び出す
+      return await this.queueManager
+        .getAudioGenerator()
+        .generateQuery(text, speaker);
+    }, "音声合成クエリの生成中にエラーが発生しました");
   }
 
   /**
    * 音声合成用クエリから音声ファイルを生成
+   * 重複を避けるためにQueueManagerの機能に委譲
+   *
    * @param query 音声合成用クエリ
    * @param output 出力ファイルパスまたは出力ディレクトリ（省略時は一時ディレクトリに生成）
    * @param speaker 話者ID
@@ -141,76 +118,42 @@ export class VoicevoxPlayer {
     output?: string,
     speaker: number = 1
   ): Promise<string> {
-    try {
-      // クエリから直接音声を合成（キューを使わない）
-      const audioData = await this.api.synthesize(query, speaker);
+    return withErrorHandling(async () => {
+      // クエリから音声を合成
+      const api = this.queueManager.getApi();
+      const audioData = await api.synthesize(query, speaker);
 
-      // outputが未定義または空文字列の場合は、一時ディレクトリにファイルを作成
+      // ファイル保存処理をFileManagerに完全に委譲
+      const fileManager = this.queueManager.getFileManager();
+
+      // 出力パスが指定されていない場合は一時ファイル、指定されている場合は指定パスに保存
       if (!output) {
-        const tempFilePath = this.createTempFilePath();
-        await fsPromises.writeFile(tempFilePath, Buffer.from(audioData));
-        return tempFilePath;
+        return await fileManager.saveTempAudioFile(audioData);
+      } else {
+        return await fileManager.saveAudioFile(audioData, output);
       }
-
-      // 出力が実際にディレクトリかファイルパスか判断
-      let targetPath = output;
-      let isDir = false;
-
-      try {
-        const outputStat = await stat(output);
-        isDir = outputStat.isDirectory();
-      } catch (err) {
-        // ファイルまたはディレクトリが存在しない場合
-        // 末尾がスラッシュで終わる場合はディレクトリと見なす
-        isDir = output.endsWith("/") || output.endsWith("\\");
-      }
-
-      // ディレクトリの場合、ファイル名を生成
-      if (isDir) {
-        const filename = `voice-${uuidv4()}.wav`;
-        targetPath = join(output, filename);
-      }
-
-      // 出力ディレクトリが存在するか確認し、存在しない場合は作成
-      await fsPromises.mkdir(dirname(targetPath), { recursive: true });
-
-      // 音声データを指定された出力先に書き込み
-      await fsPromises.writeFile(targetPath, Buffer.from(audioData));
-
-      return targetPath;
-    } catch (error) {
-      throw handleError("音声ファイル生成中にエラーが発生しました", error);
-    }
+    }, "音声ファイル生成中にエラーが発生しました");
   }
 
   /**
-   * 一時ファイルのパスを生成
-   * @returns 一時ファイルのパス
+   * 再生を開始
    */
-  private createTempFilePath(): string {
-    const uniqueFilename = `voicevox-${uuidv4()}.wav`;
-    return join(tmpdir(), uniqueFilename);
-  }
-
-  /**
-   * キューをクリア
-   */
-  public clearQueue(): void {
-    this.queueManager.clearQueue();
+  public startPlayback(): void {
+    this.queueManager.startPlayback();
   }
 
   /**
    * 再生を一時停止
    */
-  public pausePlayback(): Promise<void> {
-    return this.queueManager.pausePlayback();
+  public pausePlayback(): void {
+    this.queueManager.pausePlayback();
   }
 
   /**
    * 再生を再開
    */
-  public resumePlayback(): Promise<void> {
-    return this.queueManager.resumePlayback();
+  public resumePlayback(): void {
+    this.queueManager.resumePlayback();
   }
 
   /**
@@ -221,23 +164,26 @@ export class VoicevoxPlayer {
   }
 
   /**
-   * イベントリスナーを追加
-   * キュー管理システムからのイベントを監視できるようにする
+   * キューが空かどうかを確認
    */
-  public addEventListener(
-    event: QueueEventType,
-    listener: (event: QueueEventType, item?: any) => void
-  ): void {
-    this.queueManager.addEventListener(event, listener);
+  public isQueueEmpty(): boolean {
+    return this.queueManager.getQueue().length === 0;
   }
 
   /**
-   * イベントリスナーを削除
+   * キューが再生中かどうかを確認
    */
-  public removeEventListener(
-    event: QueueEventType,
-    listener: (event: QueueEventType, item?: any) => void
-  ): void {
-    this.queueManager.removeEventListener(event, listener);
+  public isPlaying(): boolean {
+    return this.queueManager
+      .getQueue()
+      .some((item) => item.status === QueueItemStatus.PLAYING);
+  }
+
+  /**
+   * キューマネージャーインスタンスを取得
+   * 高度な操作のため公開
+   */
+  public getQueueManager(): VoicevoxQueueManager {
+    return this.queueManager;
   }
 }

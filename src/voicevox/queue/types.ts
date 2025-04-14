@@ -35,6 +35,7 @@ export enum QueueEventType {
   ITEM_ADDED = "item_added", // アイテム追加
   ITEM_REMOVED = "item_removed", // アイテム削除
   ITEM_STATUS_CHANGED = "item_status_changed", // 状態変更
+  ITEM_COMPLETED = "item_completed", // アイテム再生完了
   QUEUE_CLEARED = "queue_cleared", // キュークリア
   PLAYBACK_STARTED = "playback_started", // 再生開始
   PLAYBACK_PAUSED = "playback_paused", // 再生一時停止

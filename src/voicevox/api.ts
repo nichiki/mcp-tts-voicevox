@@ -19,7 +19,7 @@ export class VoicevoxApi {
     try {
       const endpoint = `/audio_query?text=${encodeURIComponent(
         text
-      )}&speaker=${speaker}`;
+      )}&speaker=${encodeURIComponent(speaker.toString())}`;
       const query = await this.makeRequest<AudioQuery>("post", endpoint, null, {
         "Content-Type": "application/json",
       });
@@ -40,7 +40,7 @@ export class VoicevoxApi {
     try {
       return await this.makeRequest<ArrayBuffer>(
         "post",
-        `/synthesis?speaker=${speaker}`,
+        `/synthesis?speaker=${encodeURIComponent(speaker.toString())}`,
         query,
         {
           "Content-Type": "application/json",
@@ -64,7 +64,7 @@ export class VoicevoxApi {
     try {
       let endpoint = `/audio_query_from_preset?text=${encodeURIComponent(
         text
-      )}&preset_id=${presetId}`;
+      )}&preset_id=${encodeURIComponent(presetId.toString())}`;
 
       if (coreVersion) {
         endpoint += `&core_version=${encodeURIComponent(coreVersion)}`;

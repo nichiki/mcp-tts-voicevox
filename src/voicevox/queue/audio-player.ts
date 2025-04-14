@@ -1,11 +1,8 @@
 import { handleError } from "../error";
+import { isTestEnvironment } from "../utils";
 
 // sound-playは型定義がないのでrequireで読み込む
 const soundPlay = require("sound-play");
-
-// テスト環境かどうかを判定
-const isTestEnvironment =
-  process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
 
 /**
  * 音声再生クラス
@@ -35,7 +32,7 @@ export class AudioPlayer {
    */
   public logError(message: string, error: unknown): void {
     // テスト環境ではエラーログを出力しない
-    if (!isTestEnvironment) {
+    if (!isTestEnvironment()) {
       console.error(message, error);
     }
   }

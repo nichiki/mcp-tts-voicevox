@@ -2,10 +2,7 @@ import { VoicevoxApi } from "../api";
 import { AudioQuery } from "../types";
 import { QueueItem, QueueItemStatus } from "./types";
 import { AudioFileManager } from "./file-manager";
-
-// テスト環境かどうかを判定
-const isTestEnvironment =
-  process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
+import { isTestEnvironment } from "../utils";
 
 /**
  * 音声生成クラス
@@ -30,10 +27,16 @@ export class AudioGenerator {
     text: string,
     speaker: number
   ): Promise<AudioQuery> {
-    const query = await this.api.generateQuery(text, speaker);
-    query.prePhonemeLength = 0;
-    query.postPhonemeLength = 0;
-    return query;
+    try {
+      const query = await this.api.generateQuery(text, speaker);
+      query.prePhonemeLength = 0;
+      query.postPhonemeLength = 0;
+      return query;
+    } catch (error) {
+      // APIエラーをそのまま上位に伝播させる
+      console.error(`Error generating query: ${error}`);
+      throw error;
+    }
   }
 
   /**
