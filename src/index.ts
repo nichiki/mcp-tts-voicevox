@@ -44,9 +44,9 @@ server.tool(
   "Convert text to speech and play it",
   {
     text: z
-      .string()
+      .array(z.string())
       .describe(
-        "Text to be spoken (if both query and text are provided, query takes precedence)"
+        "Provide an array of sentences to synthesize and play in order. For faster playback start, it is recommended to make the first element short."
       ),
     speaker: z
       .number()
@@ -182,7 +182,6 @@ server.connect(new StdioServerTransport()).catch((error) => {
   process.exit(1);
 });
 
-// 型定義のエクスポート（モジュールとして使用する場合）
 export {
   AudioQuery,
   VoicevoxConfig,
