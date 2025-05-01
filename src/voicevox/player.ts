@@ -176,4 +176,13 @@ export class VoicevoxPlayer {
   public getQueueManager(): VoicevoxQueueManager {
     return this.queueManager;
   }
+
+  /**
+   * キューをクリア
+   */
+  public async clearQueue(): Promise<void> {
+    return withErrorHandling(async () => {
+      await this.queueManager.clearQueue();
+    }, "キューのクリア中にエラーが発生しました");
+  }
 }

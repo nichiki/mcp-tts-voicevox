@@ -177,6 +177,23 @@ server.tool(
   }
 );
 
+// キュークリアツール
+server.tool(
+  "clear_queue",
+  "Clear the current synthesis queue",
+  {},
+  async () => {
+    try {
+      await voicevoxClient.clearQueue();
+      return {
+        content: [{ type: "text", text: "キューをクリアしました" }],
+      };
+    } catch (error) {
+      return handleError(error);
+    }
+  }
+);
+
 server.connect(new StdioServerTransport()).catch((error) => {
   console.error("Error connecting to MCP transport:", error);
   process.exit(1);

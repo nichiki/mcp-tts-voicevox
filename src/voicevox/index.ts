@@ -270,6 +270,13 @@ export class VoicevoxClient {
       throw new Error("無効なVOICEVOXのURLです");
     }
   }
+
+  /**
+   * キューをクリア
+   */
+  public async clearQueue(): Promise<void> {
+    return this.player.clearQueue();
+  }
 }
 
 // 型定義の再エクスポート
