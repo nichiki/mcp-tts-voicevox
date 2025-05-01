@@ -2,58 +2,59 @@
 
 このドキュメントでは、MCP TTS Voicevox の動作シーケンスとクラス構造を図で示します。
 
+## ツール仕様サマリ
+
+| ツール名 | 主パラメータ | 型 | 備考 |
+|----------|--------------|----|------|
+| `speak` | `text` | string[] | 配列 |
+|  | `speaker?` `speedScale?` | number | 省略時はデフォルト |
+| `generate_query` | `text` | string | |
+| `synthesize_file` | `text?`／`query?` | string / AudioQuery | `query` 優先 |
+|  | `output` | string | 未指定なら一時ファイル|
+| `clear_queue` | – | – | |
+
 ## シーケンス図
 
-### `speak` ツールの呼び出し
-
-MCPクライアントが `speak` ツールを呼び出した際の、テキストの音声再生までの大まかな流れを示します。
+### `speak` 呼び出し
 
 ```mermaid
 sequenceDiagram
-    participant Client as MCP Client
-    participant Server as McpServer (index.ts)
-    participant VClient as VoicevoxClient (voicevox/index.ts)
-    participant VApi as VoicevoxApi (voicevox/api.ts)
-    participant QueueMgr as VoicevoxQueueManager (queue/manager.ts)
-    participant AudioGen as AudioGenerator (queue/audio-generator.ts)
-    participant Engine as VOICEVOX Engine
-    participant AudioPlayer as AudioPlayer (queue/audio-player.ts)
-    participant FileManager as AudioFileManager (queue/file-manager.ts)
+    participant Client as MCP Client
+    participant Server as McpServer
+    participant VClient as VoicevoxClient
+    participant QueueMgr as VoicevoxQueueManager
+    participant AudioGen as AudioGenerator
+    participant VApi as VoicevoxApi
+    participant Engine as VOICEVOX Engine
+    participant AudioPlayer as AudioPlayer
+    participant FileMgr as AudioFileManager
 
-    Client->>Server: invoke("speak", { text: "...", speaker: 1 })
-    Server->>VClient: speak("...", 1)
-    
-    Note over VClient: テキストをsplitText()で分割
-    
-    VClient->>VApi: generateQuery("segment", 1)
-    VApi->>Engine: POST /audio_query
-    Engine-->>VApi: AudioQuery JSON
-    VApi-->>VClient: AudioQuery
-    
-    VClient->>QueueMgr: enqueueQuery(query, 1)
-    QueueMgr-->>VClient: キュー追加完了
+    %% ① API 受信
+    Client->>Server: invoke("speak", { **text: "…" | ["…", …]**, speaker?, speedScale? })
+    Server->>VClient: speak(text, speaker?, speedScale?)
+
+    %% ② VClient でテキスト分割＆最初のセグメント処理
+    Note over VClient: 単文なら配列化
+    VClient->>QueueMgr: enqueueQuery(firstQuery)
+    QueueMgr-->>VClient: 追加完了
     VClient-->>Server: 成功応答
-    Server-->>Client: { content: [{ type: "text", text: "音声生成キューに追加しました: ..." }] }
+    Server-->>Client: { "音声生成キューに追加しました" }
 
-    Note over QueueMgr, AudioPlayer: 以下は非同期で実行されるキュー処理
-
-    QueueMgr->>AudioGen: generateAudioFromQuery(item, updateStatus)
-    AudioGen->>VApi: synthesize(Query, 1)
+    %% === 以下は非同期タスク ===
+    Note over QueueMgr,AudioPlayer: 非同期キュー処理
+    QueueMgr->>AudioGen: generateAudioFromQuery(item)
+    AudioGen->>VApi: synthesize(query)
     VApi->>Engine: POST /synthesis
-    Engine-->>VApi: WAV Audio Data
-    VApi-->>AudioGen: Audio Data
-    
-    AudioGen->>FileManager: saveTempAudioFile(audioData)
-    FileManager-->>AudioGen: tempFilePath
-    
-    AudioGen-->>QueueMgr: Audio Data & Status Update (READY)
+    Engine-->>VApi: WAV
+    VApi-->>AudioGen: Audio Data
+    AudioGen->>FileMgr: saveTempAudioFile()
+    FileMgr-->>AudioGen: tempFilePath
+    AudioGen-->>QueueMgr: READY
     QueueMgr->>AudioPlayer: playAudio(tempFile)
-    AudioPlayer->>System: 音声再生
+    AudioPlayer->>System: 再生
 ```
 
-### `generate_query` ツールの呼び出し
-
-MCPクライアントが `generate_query` ツールを呼び出した際の、AudioQuery生成の流れを示します。
+### `generate_query` 呼び出し
 
 ```mermaid
 sequenceDiagram
@@ -73,41 +74,38 @@ sequenceDiagram
     Server-->>Client: { content: [{ type: "text", text: "AudioQuery JSON" }] }
 ```
 
-### `synthesize_file` ツールの呼び出し (テキスト指定)
+### `synthesize_file` 呼び出し (テキスト指定)
 
-MCPクライアントが `synthesize_file` ツールをテキスト指定で呼び出した際の、音声ファイル生成の流れを示します。
 
 ```mermaid
 sequenceDiagram
-    participant Client as MCP Client
-    participant Server as McpServer (index.ts)
-    participant VClient as VoicevoxClient (voicevox/index.ts)
-    participant VApi as VoicevoxApi (voicevox/api.ts)
-    participant Engine as VOICEVOX Engine
-    participant FileManager as AudioFileManager (queue/file-manager.ts)
+    participant Client as MCP Client
+    participant Server as McpServer
+    participant VClient as VoicevoxClient
+    participant VApi as VoicevoxApi
+    participant Engine as VOICEVOX Engine
+    participant FileMgr as AudioFileManager
 
-    Client->>Server: invoke("synthesize_file", { text: "...", output: "...", speaker: 1 })
-    Server->>VClient: generateAudioFile("...", "...", 1)
-    VClient->>VApi: generateQuery("...", 1)
-    VApi->>Engine: POST /audio_query
-    Engine-->>VApi: AudioQuery JSON
-    VApi-->>VClient: AudioQuery
-    
-    VClient->>VApi: synthesize(query, 1)
-    VApi->>Engine: POST /synthesis
-    Engine-->>VApi: WAV Audio Data
-    VApi-->>VClient: Audio Data
-    
-    VClient->>FileManager: saveTempAudioFile(audioData)
-    FileManager-->>VClient: filePath
-    
+    Client->>Server: invoke("synthesize_file", { text | query, output?, speaker? })
+    Server->>VClient: generateAudioFile(text|query, output?, speaker?)
+    alt output 未指定
+        VClient->>VApi: synthesize(query)
+        VApi->>Engine: POST /synthesis
+        Engine-->>VApi: WAV
+        VApi-->>VClient: Audio Data
+        VClient->>FileMgr: **saveTempAudioFile**(audioData)
+    else output 指定
+        VClient->>VApi: synthesize(query)
+        VApi-->>VClient: Audio Data
+        VClient->>FileMgr: **saveAudioFile**(audioData, output)
+    end
+    FileMgr-->>VClient: filePath
     VClient-->>Server: filePath
-    Server-->>Client: { content: [{ type: "text", text: "filePath" }] }
+    Server-->>Client: { filePath }
 ```
 
-### `synthesize_file` ツールの呼び出し (クエリ指定)
+### `synthesize_file` 呼び出し (クエリ指定)
 
-MCPクライアントが `synthesize_file` ツールをクエリ指定で呼び出した際の、音声ファイル生成の流れを示します。
 
 ```mermaid
 sequenceDiagram
@@ -275,73 +273,4 @@ classDiagram
     VoicevoxQueueManager --> QueueItem : manages
     AudioGenerator --> VoicevoxApi : uses
     AudioGenerator --> AudioFileManager : uses
-```
-
-## データ型
-
-主要なデータ型を示します。
-
-```mermaid
-classDiagram
-    class AudioQuery {
-        accent_phrases: AccentPhrase[]
-        speedScale: number
-        pitchScale: number
-        intonationScale: number
-        volumeScale: number
-        prePhonemeLength: number
-        postPhonemeLength: number
-        outputSamplingRate: number
-        outputStereo: boolean
-        kana?: string
-    }
-
-    class AccentPhrase {
-        moras: Mora[]
-        accent: number
-        pause_mora?: Mora
-        is_interrogative?: boolean
-    }
-
-    class Mora {
-        text: string
-        consonant?: string
-        consonant_length?: number
-        vowel: string
-        vowel_length: number
-        pitch: number
-    }
-
-    class VoicevoxConfig {
-        url: string
-        defaultSpeaker: number
-        defaultSpeedScale?: number
-    }
-
-    class QueueItemStatus {
-        <<enumeration>>
-        PENDING
-        GENERATING
-        READY
-        PLAYING
-        DONE
-        PAUSED
-        ERROR
-    }
-
-    class QueueEventType {
-        <<enumeration>>
-        ITEM_ADDED
-        ITEM_REMOVED
-        ITEM_STATUS_CHANGED
-        QUEUE_CLEARED
-        PLAYBACK_STARTED
-        PLAYBACK_PAUSED
-        PLAYBACK_RESUMED
-        PLAYBACK_COMPLETED
-        ERROR
-    }
-
-    AudioQuery --> AccentPhrase : contains
-    AccentPhrase --> Mora : contains
 ```

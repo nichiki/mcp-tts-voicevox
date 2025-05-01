@@ -22,21 +22,25 @@ export class VoicevoxClient {
 
   /**
    * テキストを音声に変換して再生します
-   * @param text 変換するテキスト
+   * @param text 変換するテキストまたはテキストの配列
    * @param speaker 話者ID（オプション）
    * @param speedScale 再生速度（オプション）
    * @returns 処理結果のメッセージ
    */
   public async speak(
-    text: string,
+    text: string | string[],
     speaker?: number,
     speedScale?: number
   ): Promise<string> {
     try {
       const speakerId = this.getSpeakerId(speaker);
       const speed = this.getSpeedScale(speedScale);
-      const segments = splitText(text, this.maxSegmentLength);
       const queueManager = this.player.getQueueManager();
+
+      // 文字列配列の場合は直接使用、文字列の場合は分割して配列に変換
+      const segments = Array.isArray(text)
+        ? text
+        : splitText(text, this.maxSegmentLength);
 
       if (segments.length === 0) {
         return "テキストが空です";
@@ -66,7 +70,9 @@ export class VoicevoxClient {
         });
       }
 
-      return `音声生成キューに追加しました: ${text}`;
+      return `音声生成キューに追加しました: ${
+        Array.isArray(text) ? text.join(" ") : text
+      }`;
     } catch (error) {
       return formatError("音声生成中にエラーが発生しました", error);
     }
@@ -263,6 +269,13 @@ export class VoicevoxClient {
     } catch {
       throw new Error("無効なVOICEVOXのURLです");
     }
+  }
+
+  /**
+   * キューをクリア
+   */
+  public async clearQueue(): Promise<void> {
+    return this.player.clearQueue();
   }
 }
 

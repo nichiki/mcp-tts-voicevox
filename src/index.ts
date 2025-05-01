@@ -15,7 +15,7 @@ import {
 
 const server = new McpServer({
   name: "MCP TTS Voicevox",
-  version: "0.0.8",
+  version: "0.0.9",
   description:
     "A Voicevox server that converts text to speech for playback and saving.",
 });
@@ -44,9 +44,9 @@ server.tool(
   "Convert text to speech and play it",
   {
     text: z
-      .string()
+      .array(z.string())
       .describe(
-        "Text to be spoken (if both query and text are provided, query takes precedence)"
+        "Provide an array of sentences to synthesize and play in order. For faster playback start, it is recommended to make the first element short."
       ),
     speaker: z
       .number()
@@ -177,12 +177,28 @@ server.tool(
   }
 );
 
+// キュークリアツール
+server.tool(
+  "clear_queue",
+  "Clear the current synthesis queue",
+  {},
+  async () => {
+    try {
+      await voicevoxClient.clearQueue();
+      return {
+        content: [{ type: "text", text: "キューをクリアしました" }],
+      };
+    } catch (error) {
+      return handleError(error);
+    }
+  }
+);
+
 server.connect(new StdioServerTransport()).catch((error) => {
   console.error("Error connecting to MCP transport:", error);
   process.exit(1);
 });
 
-// 型定義のエクスポート（モジュールとして使用する場合）
 export {
   AudioQuery,
   VoicevoxConfig,
