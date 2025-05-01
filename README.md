@@ -52,6 +52,9 @@ await client.speak("こんにちは");
 
 // テキストから音声ファイルを生成
 const filePath = await client.generateAudioFile("こんにちは", "./output.wav");
+
+// キューをクリア
+await client.clearQueue();
 ```
 
 ## 主な機能
@@ -59,10 +62,13 @@ const filePath = await client.generateAudioFile("こんにちは", "./output.wav
 - **テキスト読み上げ** (`speak`) - テキストを音声に変換して再生
 - **クエリ生成** (`generate_query`) - 音声合成用クエリの作成
 - **ファイル生成** (`synthesize_file`) - クエリから音声ファイルを生成
+- **キュークリア** (`clear_queue`) - 現在の音声合成キューをすべてクリア
 
 ## 環境変数
 
 - `VOICEVOX_URL`: VOICEVOXエンジンのURL（デフォルト: `http://localhost:50021`）
+- `VOICEVOX_DEFAULT_SPEAKER`: デフォルト話者ID（例: `1`）
+- `VOICEVOX_DEFAULT_SPEED_SCALE`: デフォルト再生速度（例: `1.0`）
 
 ## ライセンス
 
