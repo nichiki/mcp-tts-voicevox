@@ -15,7 +15,7 @@ import {
 
 const server = new McpServer({
   name: "MCP TTS Voicevox",
-  version: "0.0.8",
+  version: "0.0.9",
   description:
     "A Voicevox server that converts text to speech for playback and saving.",
 });
