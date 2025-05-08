@@ -51,6 +51,9 @@ function arrayBufferToUint8Array(data: ArrayBuffer): Uint8Array {
  * 音声ファイルの一時保存と削除を担当
  */
 export class AudioFileManager {
+  // ブラウザで作成したblobURLを追跡するセット
+  private blobUrls: Set<string> = new Set();
+
   /**
    * 一時ファイルのパスを生成
    * @returns 一時ファイルのフルパス
@@ -73,11 +76,14 @@ export class AudioFileManager {
 
   /**
    * 一時ファイルを削除
-   * @param filePath 削除するファイルのパス
+   * @param filePath 削除するファイルのパスまたはblobURL
    */
   public async deleteTempFile(filePath: string): Promise<void> {
-    // ブラウザでは不要
-    if (isBrowser()) return;
+    if (isBrowser()) {
+      // ブラウザ環境ではblobURLを解放
+      this.releaseBlobUrl(filePath);
+      return;
+    }
 
     // Node.jsモジュールが利用可能か確認
     if (!fsPromises) {
@@ -101,10 +107,58 @@ export class AudioFileManager {
   }
 
   /**
+   * BlobURLを作成して追跡対象に追加
+   * @param blob Blobオブジェクト
+   * @param type MIMEタイプ（デフォルトはaudio/wav）
+   * @returns 作成したBlobURL
+   */
+  public createBlobUrl(blob: Blob): string {
+    // Blobのtype属性が空または不適切な場合は、適切なMIMEタイプを設定
+    if (!blob.type || blob.type === "audio/x-wav") {
+      // WAVファイル形式に適したMIMEタイプをブラウザ互換性を考慮して設定
+      const tempBlob = new Blob([blob], {
+        type: "audio/wav; codecs=1",
+      });
+      const url = URL.createObjectURL(tempBlob);
+      this.blobUrls.add(url);
+      return url;
+    } else {
+      // すでに適切なtype属性がある場合はそのまま使用
+      const url = URL.createObjectURL(blob);
+      this.blobUrls.add(url);
+      return url;
+    }
+  }
+
+  /**
+   * BlobURLを解放して追跡対象から削除
+   * @param url 解放するBlobURL
+   */
+  public releaseBlobUrl(url: string): void {
+    if (this.blobUrls.has(url)) {
+      URL.revokeObjectURL(url);
+      this.blobUrls.delete(url);
+    } else if (url.startsWith("blob:")) {
+      // 追跡対象になくてもblobURLと思われる場合は解放を試みる
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  /**
+   * 全てのBlobURLを解放
+   */
+  public releaseAllBlobUrls(): void {
+    this.blobUrls.forEach((url) => {
+      URL.revokeObjectURL(url);
+    });
+    this.blobUrls.clear();
+  }
+
+  /**
    * バイナリーデータを一時ファイルに保存
    * @param audioData 音声バイナリーデータ
    * @param filename ファイル名（オプション、ブラウザ環境でのダウンロード時に使用）
-   * @returns 保存した一時ファイルのパス、またはブラウザ環境ではデータURL
+   * @returns 保存した一時ファイルのパス、またはブラウザ環境ではblobURL
    */
   public async saveTempAudioFile(
     audioData: ArrayBuffer,
@@ -112,14 +166,10 @@ export class AudioFileManager {
   ): Promise<string> {
     try {
       if (isBrowser()) {
-        // ブラウザ環境ではダウンロードを実行
+        // ブラウザ環境ではBlobとURLを作成して返す（ダウンロードを実行しない）
+        // 一般的なブラウザで最も広くサポートされているMIMEタイプを使用
         const blob = new Blob([audioData], { type: "audio/wav" });
-        const url = URL.createObjectURL(blob);
-
-        // ファイル名を指定するかランダム生成
-        const outputFilename = filename || `voicevox-${uuidv4()}.wav`;
-
-        return this.browserDownloadFile(blob, outputFilename);
+        return this.createBlobUrl(blob);
       }
 
       // Node.jsモジュールが利用可能か確認
@@ -143,21 +193,27 @@ export class AudioFileManager {
    * バイナリーデータを指定されたパスに保存
    * @param audioData 音声バイナリーデータ
    * @param output 出力ファイルパスまたは出力ディレクトリ
-   * @returns 保存したファイルのパス、またはブラウザ環境ではダウンロードの結果
+   * @param forceDownload ブラウザ環境でも強制的にダウンロードを行う（デフォルトはtrue）
+   * @returns 保存したファイルのパス、またはブラウザ環境ではダウンロードの結果またはblobURL
    */
   public async saveAudioFile(
     audioData: ArrayBuffer,
-    output: string
+    output: string,
+    forceDownload: boolean = true
   ): Promise<string> {
     try {
       if (isBrowser()) {
-        // ブラウザ環境ではダウンロードを提供
+        // ブラウザ環境
         const blob = new Blob([audioData], { type: "audio/wav" });
-
-        // ファイル名の処理を改善
         const filename = output || `voice-${uuidv4()}.wav`;
 
-        return this.browserDownloadFile(blob, filename);
+        // forceDownloadフラグがtrueの場合のみダウンロードを実行
+        if (forceDownload) {
+          return this.browserDownloadFile(blob, filename);
+        } else {
+          // 強制ダウンロードでない場合はblobURLを返す
+          return this.createBlobUrl(blob);
+        }
       }
 
       // Node.jsモジュールが利用可能か確認
@@ -209,8 +265,8 @@ export class AudioFileManager {
    */
   private browserDownloadFile(blob: Blob, filename: string): Promise<string> {
     return new Promise<string>((resolve) => {
-      // URL作成
-      const url = URL.createObjectURL(blob);
+      // URL作成（追跡システムを使用）
+      const url = this.createBlobUrl(blob);
 
       // aタグを作成してダウンロードを実行
       const a = document.createElement("a");
@@ -250,9 +306,9 @@ export class AudioFileManager {
           document.body.removeChild(a);
         }
 
-        // URLを解放（少し遅延させて確実にダウンロードが開始されるようにする）
+        // URLを解放（追跡システムを使用）
         setTimeout(() => {
-          URL.revokeObjectURL(url);
+          this.releaseBlobUrl(url);
         }, 100);
 
         // 完了を通知

@@ -8,7 +8,7 @@ import { AudioQuery } from "./voicevox/types";
 
 const server = new McpServer({
   name: "MCP TTS Voicevox",
-  version: "0.0.10",
+  version: "0.0.12",
   description:
     "A Voicevox server that converts text to speech for playback and saving.",
 });
@@ -25,7 +25,7 @@ const handleError = (
   error: unknown
 ): { content: Array<{ type: "text"; text: string }> } => {
   const errorMessage = error instanceof Error ? error.message : String(error);
-  console.error("エラーが発生しました:", error);
+  // console.errorを削除してエラーメッセージのみを返す
   return {
     content: [{ type: "text", text: `エラー: ${errorMessage}` }],
   };
@@ -263,6 +263,6 @@ server.tool(
 );
 
 server.connect(new StdioServerTransport()).catch((error) => {
-  console.error("Error connecting to MCP transport:", error);
+  // エラーログを出力せず、プロセスを終了するだけにする
   process.exit(1);
 });

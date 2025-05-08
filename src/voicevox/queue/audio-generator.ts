@@ -91,7 +91,18 @@ export class AudioGenerator {
     try {
       updateStatus(item, QueueItemStatus.GENERATING);
       const audioData = await this.api.synthesize(item.query, item.speaker);
+
+      // 音声データをアイテムに保存
       item.audioData = audioData;
+
+      // ブラウザ環境での音声処理を最適化
+      if (isBrowser()) {
+        try {
+          console.debug("音声データ生成完了:", audioData.byteLength, "bytes");
+        } catch (e) {
+          console.error("デバッグログ出力エラー:", e);
+        }
+      }
 
       // 一時ファイルまたはブラウザの場合はblobURLに保存
       item.tempFile = await this.fileManager.saveTempAudioFile(audioData);

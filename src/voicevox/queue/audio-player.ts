@@ -67,40 +67,144 @@ export class AudioPlayer {
   /**
    * ブラウザ環境での音声再生
    * @param audioUrl 再生するblobURL
+   * @param retryCount 再試行回数（内部使用）
    * @returns 再生完了を示すPromise
    */
-  private playAudioInBrowser(audioUrl: string): Promise<void> {
+  private playAudioInBrowser(
+    audioUrl: string,
+    retryCount: number = 0
+  ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       try {
+        console.debug(
+          "再生しようとしているURL:",
+          audioUrl,
+          "試行回数:",
+          retryCount
+        );
+
         // 既存の音声要素があれば停止して削除
         if (this.audioElement) {
           this.audioElement.pause();
           this.audioElement.src = "";
+          this.audioElement.load(); // メモリ解放のための明示的なリセット
         }
 
         // 新しい音声要素を作成
-        this.audioElement = new Audio(audioUrl);
+        this.audioElement = new Audio();
 
-        // イベントリスナーを設定
+        // デバッグ用のイベントリスナー
+        this.audioElement.addEventListener("loadstart", () =>
+          console.debug("Audio loadstart")
+        );
+        this.audioElement.addEventListener("durationchange", () =>
+          console.debug("Audio durationchange:", this.audioElement?.duration)
+        );
+        this.audioElement.addEventListener("loadedmetadata", () =>
+          console.debug("Audio loadedmetadata")
+        );
+        this.audioElement.addEventListener("canplay", () =>
+          console.debug("Audio canplay")
+        );
+
+        // サスペンドイベント処理
+        this.audioElement.addEventListener("suspend", () => {
+          console.debug("Audio suspended");
+        });
+
+        // エラーイベントを詳細に捕捉
+        this.audioElement.onerror = (event) => {
+          const errorCode = this.audioElement?.error?.code;
+          const errorMessage = this.audioElement?.error?.message;
+
+          // 実際にエラーオブジェクトが存在するか確認
+          if (errorCode !== undefined || errorMessage) {
+            console.error("Audio error details:", {
+              code: errorCode,
+              message: errorMessage,
+              event,
+            });
+
+            // 最大3回まで再試行
+            if (retryCount < 3) {
+              console.warn(
+                `再生に失敗しました。再試行します (${retryCount + 1}/3)...`
+              );
+              // 少し待ってから再試行
+              setTimeout(() => {
+                this.playAudioInBrowser(audioUrl, retryCount + 1)
+                  .then(resolve)
+                  .catch(reject);
+              }, 300);
+              return;
+            }
+
+            reject(
+              new Error(
+                `Audio playback error: ${
+                  errorMessage || "Unknown error"
+                } (Code: ${errorCode})`
+              )
+            );
+          } else {
+            // エラーオブジェクトがないがイベントが発生した場合は警告として扱う
+            console.warn(
+              "Audio event triggered but no error details available. Continuing playback..."
+            );
+            // エラーイベントが発生しても実際のエラーがなければ再生を続行
+            // ここでrejectしないことで再生を継続
+          }
+        };
+
+        // 成功イベント
         this.audioElement.onended = () => {
+          console.debug("Audio playback completed successfully");
           resolve();
         };
 
-        this.audioElement.onerror = (event) => {
-          reject(
-            new Error(
-              `Audio playback error: ${
-                this.audioElement?.error?.message || "Unknown error"
-              }`
-            )
-          );
+        // 中断イベント
+        this.audioElement.onabort = () => {
+          console.debug("Audio playback aborted");
+          resolve(); // 中断も完了として扱う
         };
 
+        // 事前にpreloadを設定
+        this.audioElement.preload = "auto";
+
+        // クロスオリジン設定
+        this.audioElement.crossOrigin = "anonymous";
+
+        // ソースを設定してロード
+        this.audioElement.src = audioUrl;
+        this.audioElement.load();
+
         // 再生開始
-        this.audioElement.play().catch((error) => {
-          reject(error);
-        });
+        this.audioElement
+          .play()
+          .then(() => {
+            console.debug("Audio playback started successfully");
+          })
+          .catch((error) => {
+            console.error("Failed to start audio playback:", error);
+
+            // 最大3回まで再試行
+            if (retryCount < 3) {
+              console.warn(
+                `再生開始に失敗しました。再試行します (${retryCount + 1}/3)...`
+              );
+              // 少し待ってから再試行
+              setTimeout(() => {
+                this.playAudioInBrowser(audioUrl, retryCount + 1)
+                  .then(resolve)
+                  .catch(reject);
+              }, 300);
+              return;
+            }
+
+            reject(error);
+          });
       } catch (error) {
+        console.error("Unexpected error in audio playback:", error);
         reject(error);
       }
     });

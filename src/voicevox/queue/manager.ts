@@ -12,6 +12,7 @@ import { AudioFileManager } from "./file-manager";
 import { EventManager } from "./event-manager";
 import { AudioGenerator } from "./audio-generator";
 import { AudioPlayer } from "./audio-player";
+import { isBrowser } from "../utils";
 
 /**
  * VOICEVOXキュー管理クラス
@@ -433,5 +434,29 @@ export class VoicevoxQueueManager implements QueueManager {
    */
   public getApi(): VoicevoxApi {
     return this.api;
+  }
+
+  /**
+   * 全てのリソースをクリーンアップ
+   * 使用していないときに呼び出すことで、メモリリークを防止
+   */
+  public cleanup(): void {
+    // すべてのblobURLをリリース
+    if (isBrowser()) {
+      this.fileManager.releaseAllBlobUrls();
+    }
+
+    // 一時ファイルがあれば削除
+    this.queue.forEach((item) => {
+      if (item.tempFile) {
+        this.fileManager.deleteTempFile(item.tempFile);
+      }
+    });
+
+    // キューをクリア
+    this.queue = [];
+    this.isPlaying = false;
+    this.isPaused = false;
+    this.currentPlayingItem = null;
   }
 }
