@@ -55,14 +55,22 @@ const filePath = await client.generateAudioFile("こんにちは", "./output.wav
 
 // キューをクリア
 await client.clearQueue();
+
+// スピーカー一覧を取得
+const speakers = await client.getSpeakers();
+
+// スピーカー詳細を取得
+const speakerInfo = await client.getSpeakerInfo(1);
 ```
 
 ## 主な機能
 
 - **テキスト読み上げ** (`speak`) - テキストを音声に変換して再生
+- **読み上げ停止** (`stop_speaker`) - 現在の音声合成キューをすべてクリア
 - **クエリ生成** (`generate_query`) - 音声合成用クエリの作成
 - **ファイル生成** (`synthesize_file`) - クエリから音声ファイルを生成
-- **キュークリア** (`clear_queue`) - 現在の音声合成キューをすべてクリア
+- **スピーカー一覧取得** (`get_speakers`) - 利用可能なスピーカー一覧を取得
+- **スピーカー詳細取得** (`get_speaker_detail`) - スピーカーIDから詳細情報を取得
 
 ## 環境変数
 
