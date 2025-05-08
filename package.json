@@ -1,9 +1,17 @@
 {
   "name": "@kajidog/mcp-tts-voicevox",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "VOICEVOX integration for MCP - Text-to-Speech server using VOICEVOX engine",
   "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "bin": {
     "mcp-tts-voicevox": "dist/index.js"
   },
@@ -25,7 +33,9 @@
     "voicevox",
     "tts",
     "mcp",
-    "mcp-server"
+    "mcp-server",
+    "browser",
+    "node"
   ],
   "author": {
     "name": "kajidog",
@@ -55,5 +65,11 @@
     "ts-jest": "^29.3.1",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
+  },
+  "browser": {
+    "fs": false,
+    "path": false,
+    "os": false,
+    "sound-play": false
   }
 }
