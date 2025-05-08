@@ -1,16 +1,26 @@
 import { handleError } from "../error";
 import { isBrowser, isTestEnvironment } from "../utils";
 
-// sound-playは型定義がないのでrequireで読み込む
-let soundPlay: any;
+// sound-playは動的インポートで読み込み
+let soundPlay: any = null;
+
+// ブラウザではない場合のみ読み込みを試行
 if (!isBrowser()) {
-  try {
-    soundPlay = require("sound-play");
-  } catch (error) {
-    console.warn(
-      "sound-play module could not be loaded. Audio playback may not work."
-    );
-  }
+  // 非同期で読み込み試行
+  (async () => {
+    try {
+      // 動的インポートを試みる
+      soundPlay = await import("sound-play").catch(() => {
+        // 通常のimportが失敗した場合、requireを試す（古いNode.js環境向け）
+        return require("sound-play");
+      });
+    } catch (error) {
+      console.warn(
+        "sound-play module could not be loaded. Audio playback may not work. Please ensure it is installed correctly.",
+        error
+      );
+    }
+  })();
 }
 
 /**
@@ -32,7 +42,16 @@ export class AudioPlayer {
       } else {
         // Node.js環境での再生
         if (!soundPlay) {
-          throw new Error("sound-play module is not available");
+          // モジュールが読み込めなかった場合、もう一度読み込みを試みる
+          try {
+            soundPlay = await import("sound-play").catch(() =>
+              require("sound-play")
+            );
+          } catch (err) {
+            throw new Error(
+              "sound-play module is not available. Please ensure it is installed with 'npm install sound-play'"
+            );
+          }
         }
         await soundPlay.play(filePath);
       }
