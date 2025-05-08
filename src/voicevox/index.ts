@@ -289,6 +289,19 @@ export class VoicevoxClient {
       throw handleError("スピーカー一覧取得中にエラーが発生しました", error);
     }
   }
+
+  /**
+   * スピーカーの情報を取得
+   * @param speakerId スピーカーID
+   * @returns スピーカー情報
+   */
+  public async getSpeakerInfo(speakerId: number) {
+    try {
+      return await this.api.getSpeakerInfo(speakerId);
+    } catch (error) {
+      throw handleError("スピーカー情報取得中にエラーが発生しました", error);
+    }
+  }
 }
 
 // 型定義の再エクスポート

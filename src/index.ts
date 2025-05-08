@@ -213,6 +213,26 @@ server.tool(
   }
 );
 
+// スピーカー詳細取得ツール
+server.tool(
+  "get_speaker_detail",
+  "Get detail of a speaker by id",
+  {
+    speaker: z.number().describe("Speaker ID (speaker id)"),
+  },
+  async ({ speaker }) => {
+    try {
+      const speakerInfo = await voicevoxClient.getSpeakerInfo(speaker);
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(speakerInfo) }],
+      };
+    } catch (error) {
+      return handleError(error);
+    }
+  }
+);
+
 server.connect(new StdioServerTransport()).catch((error) => {
   console.error("Error connecting to MCP transport:", error);
   process.exit(1);

@@ -105,6 +105,24 @@ export class VoicevoxApi {
   }
 
   /**
+   * スピーカーの情報を取得
+   */
+  public async getSpeakerInfo(speakerId: number): Promise<Speaker> {
+    try {
+      const endpoint = `/speaker_info?speaker_id=${encodeURIComponent(
+        speakerId.toString()
+      )}`;
+      const response = await this.makeRequest<Speaker>("get", endpoint, null, {
+        "Content-Type": "application/json",
+      });
+
+      return response;
+    } catch (error) {
+      throw handleError("スピーカー情報取得中にエラーが発生しました", error);
+    }
+  }
+
+  /**
    * APIリクエストを実行
    * @private
    */
