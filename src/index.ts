@@ -192,7 +192,7 @@ server.tool("stop_speaker", "Stop the current speaker", {}, async () => {
 // スピーカー一覧取得ツール
 server.tool(
   "get_speakers",
-  "Get a list of available speakers and styles",
+  "Get a list of available speakers",
   {},
   async () => {
     try {
@@ -200,7 +200,7 @@ server.tool(
       // 整形: スピーカーごとにスタイルを展開し、idとnameの配列にする
       const result = speakers.flatMap((speaker) =>
         speaker.styles.map((style) => ({
-          id: style.id,
+          speaker: style.id,
           name: `${speaker.name}:${style.name}`,
         }))
       );
