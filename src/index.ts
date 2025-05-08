@@ -177,22 +177,17 @@ server.tool(
   }
 );
 
-// キュークリアツール
-server.tool(
-  "clear_queue",
-  "Clear the current synthesis queue",
-  {},
-  async () => {
-    try {
-      await voicevoxClient.clearQueue();
-      return {
-        content: [{ type: "text", text: "キューをクリアしました" }],
-      };
-    } catch (error) {
-      return handleError(error);
-    }
+// スピーカー停止ツール
+server.tool("stop_speaker", "Stop the current speaker", {}, async () => {
+  try {
+    await voicevoxClient.clearQueue();
+    return {
+      content: [{ type: "text", text: "スピーカーを停止しました" }],
+    };
+  } catch (error) {
+    return handleError(error);
   }
-);
+});
 
 // スピーカー一覧取得ツール
 server.tool(

@@ -232,12 +232,12 @@ export class VoicevoxClient {
           });
         }
 
-        return `テキストをキューに追加しました: ${textOrQuery}`;
+        return `テキストをキューに追加しました`;
       } else {
         // クエリをキューに追加
         const query = { ...textOrQuery, speedScale: speed };
         await queueManager.enqueueQuery(query, speakerId);
-        return "クエリをキューに追加しました";
+        return `クエリをキューに追加しました`;
       }
     } catch (error) {
       return formatError("音声生成中にエラーが発生しました", error);
