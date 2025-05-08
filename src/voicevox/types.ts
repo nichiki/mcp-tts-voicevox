@@ -140,6 +140,23 @@ export interface FramePhoneme {
 }
 
 /**
+ * スピーカーの情報
+ */
+export interface Speaker {
+  name: string;
+  speaker_uuid: string;
+  styles: {
+    name: string;
+    id: number;
+    type: string;
+  }[];
+  version: string;
+  supported_features: {
+    permitted_synthesis_morphing: string;
+  };
+}
+
+/**
  * VOICEVOXエラークラス
  */
 export class VoicevoxError extends Error {
