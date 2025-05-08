@@ -1,5 +1,5 @@
 import axios, { AxiosRequestConfig } from "axios";
-import { AudioQuery, VoicevoxError } from "./types";
+import { AudioQuery, Speaker, VoicevoxError } from "./types";
 import { handleError } from "./error";
 
 export class VoicevoxApi {
@@ -80,6 +80,27 @@ export class VoicevoxApi {
         "プリセットを使用した音声クエリ生成中にエラーが発生しました",
         error
       );
+    }
+  }
+
+  /**
+   * スピーカーの一覧を取得
+   */
+  public async getSpeakers(): Promise<Speaker[]> {
+    try {
+      const endpoint = "/speakers";
+      const response = await this.makeRequest<Speaker[]>(
+        "get",
+        endpoint,
+        null,
+        {
+          "Content-Type": "application/json",
+        }
+      );
+
+      return response;
+    } catch (error) {
+      throw handleError("スピーカー一覧取得中にエラーが発生しました", error);
     }
   }
 

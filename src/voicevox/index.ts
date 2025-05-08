@@ -277,6 +277,18 @@ export class VoicevoxClient {
   public async clearQueue(): Promise<void> {
     return this.player.clearQueue();
   }
+
+  /**
+   * スピーカー一覧を取得します
+   * @returns スピーカー情報の配列
+   */
+  public async getSpeakers() {
+    try {
+      return await this.api.getSpeakers();
+    } catch (error) {
+      throw handleError("スピーカー一覧取得中にエラーが発生しました", error);
+    }
+  }
 }
 
 // 型定義の再エクスポート

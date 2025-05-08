@@ -194,6 +194,30 @@ server.tool(
   }
 );
 
+// スピーカー一覧取得ツール
+server.tool(
+  "get_speakers",
+  "Get a list of available speakers and styles",
+  {},
+  async () => {
+    try {
+      const speakers = await voicevoxClient.getSpeakers();
+      // 整形: スピーカーごとにスタイルを展開し、idとnameの配列にする
+      const result = speakers.flatMap((speaker) =>
+        speaker.styles.map((style) => ({
+          id: style.id,
+          name: `${speaker.name}:${style.name}`,
+        }))
+      );
+      return {
+        content: [{ type: "text", text: JSON.stringify(result) }],
+      };
+    } catch (error) {
+      return handleError(error);
+    }
+  }
+);
+
 server.connect(new StdioServerTransport()).catch((error) => {
   console.error("Error connecting to MCP transport:", error);
   process.exit(1);
