@@ -107,11 +107,9 @@ export class VoicevoxApi {
   /**
    * スピーカーの情報を取得
    */
-  public async getSpeakerInfo(speakerId: number): Promise<Speaker> {
+  public async getSpeakerInfo(uuid: string): Promise<Speaker> {
     try {
-      const endpoint = `/speaker_info?speaker_id=${encodeURIComponent(
-        speakerId.toString()
-      )}`;
+      const endpoint = `/speaker_info?speaker_uuid=${encodeURIComponent(uuid)}`;
       const response = await this.makeRequest<Speaker>("get", endpoint, null, {
         "Content-Type": "application/json",
       });

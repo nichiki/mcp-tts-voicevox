@@ -2,6 +2,7 @@ import { VoicevoxApi } from "../api";
 import { AudioQuery } from "../types";
 import { QueueItem, QueueItemStatus } from "./types";
 import { AudioFileManager } from "./file-manager";
+import { isBrowser } from "../utils";
 
 /**
  * 音声生成クラス
@@ -62,7 +63,7 @@ export class AudioGenerator {
       const audioData = await this.api.synthesize(query, item.speaker);
       item.audioData = audioData;
 
-      // 一時ファイルに書き込み
+      // 一時ファイルまたはブラウザの場合はblobURLに保存
       item.tempFile = await this.fileManager.saveTempAudioFile(audioData);
 
       updateStatus(item, QueueItemStatus.READY);
@@ -92,7 +93,7 @@ export class AudioGenerator {
       const audioData = await this.api.synthesize(item.query, item.speaker);
       item.audioData = audioData;
 
-      // 一時ファイルに書き込み
+      // 一時ファイルまたはブラウザの場合はblobURLに保存
       item.tempFile = await this.fileManager.saveTempAudioFile(audioData);
 
       updateStatus(item, QueueItemStatus.READY);

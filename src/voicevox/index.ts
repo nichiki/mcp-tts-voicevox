@@ -1,6 +1,6 @@
 import { VoicevoxPlayer } from "./player";
 import { AudioQuery, VoicevoxConfig } from "./types";
-import { splitText } from "./utils";
+import { splitText, isBrowser, downloadBlob } from "./utils";
 import { handleError, formatError } from "./error";
 import { VoicevoxApi } from "./api";
 
@@ -118,6 +118,35 @@ export class VoicevoxClient {
     try {
       const speakerId = this.getSpeakerId(speaker);
       const speed = this.getSpeedScale(speedScale);
+
+      // ブラウザ環境の場合
+      if (isBrowser()) {
+        // デフォルトのファイル名を設定
+        const filename =
+          outputPath ||
+          (typeof textOrQuery === "string"
+            ? `voice-${textOrQuery
+                .substring(0, 10)
+                .replace(/[^a-zA-Z0-9]/g, "_")}-${Date.now()}.wav`
+            : `voice-${Date.now()}.wav`);
+
+        // クエリを生成または使用
+        const query =
+          typeof textOrQuery === "string"
+            ? await this.generateQuery(textOrQuery, speakerId)
+            : { ...textOrQuery };
+
+        // 速度設定
+        query.speedScale = speed;
+
+        // 音声合成
+        const audioData = await this.api.synthesize(query, speakerId);
+
+        // 直接ダウンロード処理
+        return await downloadBlob(audioData, filename);
+      }
+
+      // Node.js環境の場合（従来のコード）
       // キューマネージャーにアクセス
       const queueManager = this.player.getQueueManager();
 
@@ -126,12 +155,17 @@ export class VoicevoxClient {
         const query = await this.generateQuery(textOrQuery, speakerId);
         query.speedScale = speed;
 
-        // 直接APIで音声合成
-        const audioData = await this.api.synthesize(query, speakerId);
-
         // 一時ファイル保存またはパス指定の保存
         if (!outputPath) {
-          return await queueManager.saveTempAudioFile(audioData);
+          // ブラウザ環境ではデフォルトファイル名を生成
+          const defaultFilename = `voice-${textOrQuery
+            .substring(0, 10)
+            .replace(/[^a-zA-Z0-9]/g, "_")}-${Date.now()}.wav`;
+          return await this.player.synthesizeToFile(
+            query,
+            defaultFilename,
+            speakerId
+          );
         } else {
           return await this.player.synthesizeToFile(
             query,
@@ -142,11 +176,16 @@ export class VoicevoxClient {
       } else {
         // クエリを使って音声合成
         const query = { ...textOrQuery, speedScale: speed };
-        const audioData = await this.api.synthesize(query, speakerId);
 
         // 一時ファイル保存またはパス指定の保存
         if (!outputPath) {
-          return await queueManager.saveTempAudioFile(audioData);
+          // ブラウザ環境ではデフォルトファイル名を生成
+          const defaultFilename = `voice-${Date.now()}.wav`;
+          return await this.player.synthesizeToFile(
+            query,
+            defaultFilename,
+            speakerId
+          );
         } else {
           return await this.player.synthesizeToFile(
             query,
@@ -292,12 +331,12 @@ export class VoicevoxClient {
 
   /**
    * スピーカーの情報を取得
-   * @param speakerId スピーカーID
+   * @param uuid スピーカーUUID
    * @returns スピーカー情報
    */
-  public async getSpeakerInfo(speakerId: number) {
+  public async getSpeakerInfo(uuid: string) {
     try {
-      return await this.api.getSpeakerInfo(speakerId);
+      return await this.api.getSpeakerInfo(uuid);
     } catch (error) {
       throw handleError("スピーカー情報取得中にエラーが発生しました", error);
     }
