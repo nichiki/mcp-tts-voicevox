@@ -91,11 +91,11 @@ class ServerConfigManager {
 class HttpServerManager {
   static async start(config: ServerConfig): Promise<void> {
     try {
-      console.log("Starting HTTP server with config:", config);
+      console.error("Starting HTTP server with config:", config);
       const app = await this.loadApp(config.isDevelopment);
-      console.log("App loaded successfully");
+      console.error("App loaded successfully");
       const server = await this.loadServer(config.isDevelopment);
-      console.log("Server module loaded successfully");
+      console.error("Server module loaded successfully");
 
       const serverOptions = {
         fetch: app.fetch,
@@ -103,23 +103,23 @@ class HttpServerManager {
         hostname: config.host,
       };
 
-      console.log("Attempting to start server with options:", serverOptions);
+      console.error("Attempting to start server with options:", serverOptions);
 
       server.serve(serverOptions, (info: ServerInfo) => {
-        console.log(
+        console.error(
           `✅ VOICEVOX MCP HTTP server running at http://${info.address}:${info.port}/mcp`
         );
-        console.log(
+        console.error(
           `📡 SSE endpoint (legacy): http://${info.address}:${info.port}/sse`
         );
-        console.log(
+        console.error(
           `🔍 Health check: http://${info.address}:${info.port}/health`
         );
       });
 
       // サーバー起動の確認を少し待つ
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      console.log("HTTP server startup completed");
+      console.error("HTTP server startup completed");
     } catch (error) {
       console.error("❌ HTTP server startup failed:", error);
       if (error instanceof Error) {
@@ -157,19 +157,14 @@ class HttpServerManager {
 class StdioServerManager {
   static async start(config: ServerConfig): Promise<void> {
     try {
-      console.log("🚀 Starting MCP server in Stdio mode...");
-
       if (config.isDevelopment) {
         await import("./stdio");
       } else {
         require("./stdio");
       }
 
-      console.log("✅ MCP Stdio server started successfully");
-
       // Stdio サーバーは常に実行中なので、プロセス終了までブロック
       process.on("SIGINT", () => {
-        console.log("\n👋 Stdio server shutting down gracefully...");
         process.exit(0);
       });
     } catch (error) {
@@ -205,22 +200,28 @@ class MCPServerManager {
     const shouldStart =
       EnvironmentDetector.isCLI() || EnvironmentDetector.isNpx();
 
-    console.log("🔍 Environment detection:", {
-      isCLI: EnvironmentDetector.isCLI(),
-      isNpx: EnvironmentDetector.isNpx(),
-      shouldStart,
-      argv1: process.argv[1],
-      argv0: process.argv0,
-      execPath: process.execPath,
-    });
+    const config = ServerConfigManager.getConfig();
 
-    if (!shouldStart) {
-      console.log("📚 Running as library, server startup skipped");
-      return; // ライブラリとして使用されている
+    // HTTPモードの場合のみログを出力
+    if (config.isHttpMode) {
+      console.error("🔍 Environment detection:", {
+        isCLI: EnvironmentDetector.isCLI(),
+        isNpx: EnvironmentDetector.isNpx(),
+        shouldStart,
+        argv1: process.argv[1],
+        argv0: process.argv0,
+        execPath: process.execPath,
+      });
+
+      console.error("⚙️ Server configuration:", config);
     }
 
-    const config = ServerConfigManager.getConfig();
-    console.log("⚙️ Server configuration:", config);
+    if (!shouldStart) {
+      if (config.isHttpMode) {
+        console.error("📚 Running as library, server startup skipped");
+      }
+      return; // ライブラリとして使用されている
+    }
 
     try {
       if (config.isHttpMode) {
