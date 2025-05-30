@@ -1,5 +1,3 @@
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/kajidog-mcp-tts-voicevox-badge.png)](https://mseep.ai/app/kajidog-mcp-tts-voicevox)
-
 # MCP TTS VOICEVOX
 
 VOICEVOX を使用した音声合成 MCP サーバー
@@ -146,3 +144,5 @@ document
 ## ライセンス
 
 ISC
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/kajidog-mcp-tts-voicevox-badge.png)](https://mseep.ai/app/kajidog-mcp-tts-voicevox)

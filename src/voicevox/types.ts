@@ -174,3 +174,9 @@ export class VoicevoxError extends Error {
     this.statusCode = statusCode;
   }
 }
+
+// 音声セグメント定義
+export interface SpeechSegment {
+  text: string;
+  speaker?: number;
+}
