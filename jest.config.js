@@ -4,11 +4,10 @@ module.exports = {
     testEnvironment: 'node',
     testPathIgnorePatterns: [
         "/node_modules/",
-        "/dist/", // distディレクトリを無視
-        "src/test.ts" // src/test.ts を無視
+        "/dist/",
+        "src/test.ts"
     ],
     moduleNameMapper: {
         // 必要に応じてモジュールのマッピングを追加
     },
-    // setupFilesAfterEnv: ['./jest.setup.js'], // セットアップファイルが必要な場合
 }; 
