@@ -323,7 +323,13 @@ document
 
 ### Claude Desktop での設定
 
-`mcp.json`ファイルに以下の設定を追加：
+**⚠️ 重要: Claude Desktop の通信モードについて**
+
+Claude Desktop は現在 **Stdio モードのみ** をサポートしており、SSE/HTTP モードは直接サポートされていません。
+
+#### 推奨設定（Stdio モード）
+
+`claude_desktop_config.json` ファイルに以下の設定を追加：
 
 ```json
 {
@@ -339,6 +345,37 @@ document
   }
 }
 ```
+
+#### SSE モードが必要な場合
+
+SSE モードでの音声合成が必要な場合は、`mcp-remote` を使用して SSE↔Stdio 変換を行えます：
+
+1. **Claude Desktop 設定**
+
+   ```json
+   {
+     "mcpServers": {
+       "tts-mcp-proxy": {
+         "command": "npx",
+         "args": ["-y", "mcp-remote", "http://localhost:3000/sse"]
+       }
+     }
+   }
+   ```
+
+2. **SSE サーバーの起動**
+
+   **Mac/Linux:**
+
+   ```bash
+   MCP_HTTP_MODE=true MCP_HTTP_PORT=3000 npx @kajidog/mcp-tts-voicevox
+   ```
+
+   **Windows:**
+
+   ```powershell
+   $env:MCP_HTTP_MODE='true'; $env:MCP_HTTP_PORT='3000'; npx @kajidog/mcp-tts-voicevox
+   ```
 
 ### AivisSpeech での設定例
 
@@ -394,175 +431,29 @@ document
 
 ## トラブルシューティング
 
-### VOICEVOX エンジンの確認
+### よくある問題
 
-1. VOICEVOX エンジンが起動していることを確認：
+1. **VOICEVOX エンジンが起動していない**
 
    ```bash
    curl http://localhost:50021/speakers
    ```
 
-2. ファイアウォールやセキュリティソフトがポートをブロックしていないか確認
+2. **ポートが既に使用されている (EADDRINUSE エラー)**
 
-### Stdio モードの問題
+   - 別のポート番号を使用するか、既存のプロセスを終了してください
 
-#### MCP クライアントで認識されない場合
+3. **MCP クライアントで認識されない**
 
-1. パッケージが正しくインストールされているか確認：
+   - パッケージのインストールを確認：`npm list -g @kajidog/mcp-tts-voicevox`
+   - 設定ファイルの JSON 構文を確認
 
-   ```bash
-   npm list -g @kajidog/mcp-tts-voicevox
-   ```
-
-2. 実行権限があることを確認：
-
-   ```bash
-   # Linux/macOS
-   chmod +x $(npm root -g)/@kajidog/mcp-tts-voicevox/dist/index.js
-   ```
-
-3. Claude Desktop の場合、設定ファイルの構文が正しいか確認
-
-#### 環境変数の設定例
-
-```bash
-# Linux/macOS の .bashrc または .zshrc
-export VOICEVOX_URL="http://localhost:50021"
-export VOICEVOX_DEFAULT_SPEAKER="1"
-
-# Windows PowerShell Profile
-$env:VOICEVOX_URL="http://localhost:50021"
-$env:VOICEVOX_DEFAULT_SPEAKER="1"
-```
-
-### HTTP モードの問題
-
-#### ポート競合
-
-ポート 3000 が使用中の場合：
-
-```bash
-MCP_HTTP_PORT=3001 npx @kajidog/mcp-tts-voicevox
-```
-
-#### CORS エラー
-
-ブラウザからアクセスする際に CORS エラーが発生する場合、VOICEVOX エンジン側でも CORS 設定が必要です。
-
-### 権限エラー
-
-ファイル生成時に権限エラーが発生する場合：
-
-```bash
-# Linux/macOS
-chmod +x node_modules/.bin/mcp-tts-voicevox
-
-# または
-sudo npm install -g @kajidog/mcp-tts-voicevox
-```
-
-### 音声再生されない場合
-
-1. システムの音声出力デバイスが正しく設定されているか確認
-2. 他のアプリケーションが音声デバイスを占有していないか確認
-3. VOICEVOX エンジンが正常に動作しているか確認：
-   ```bash
-   curl -X POST "http://localhost:50021/audio_query?text=テスト&speaker=1"
-   ```
-
-## 開発
-
-### 開発環境の起動
-
-```bash
-# 標準入出力モード
-npm run dev
-
-# HTTPモード
-npm run dev:http
-```
-
-### ビルド
-
-```bash
-npm run build
-```
-
-### テスト実行
-
-```bash
-# 音声テスト
-npm run test:sound
-
-# 単体テスト
-npm test
-```
-
-### 各モードの動作確認
-
-#### 1. ライブラリモードの確認
-
-```bash
-# ライブラリとして正常にインポートできるかテスト
-node -e "const { VoicevoxClient } = require('@kajidog/mcp-tts-voicevox'); console.log('✅ Library import successful:', typeof VoicevoxClient);"
-```
-
-#### 2. CLI/Stdio モードの確認
-
-```bash
-# Stdioモードで起動（MCP標準プロトコル通信）
-npx @kajidog/mcp-tts-voicevox
-
-# または、ローカルビルド版で確認
-node dist/index.js
-```
-
-#### 3. HTTP モードの確認
-
-```bash
-# HTTPサーバーモードで起動
-MCP_HTTP_MODE=true npx @kajidog/mcp-tts-voicevox
-
-# ヘルスチェック（別ターミナルで実行）
-curl http://localhost:3000/health
-
-# Windowsの場合
-$env:MCP_HTTP_MODE='true'; npx @kajidog/mcp-tts-voicevox
-Invoke-WebRequest -Uri http://localhost:3000/health
-```
-
-#### 4. ブラウザモードの確認
-
-ブラウザ環境での動作確認は、Web アプリケーション内で以下のようにテストできます：
-
-```javascript
-// ESModule import
-import { VoicevoxClient } from "@kajidog/mcp-tts-voicevox";
-
-// CommonJS require (Webpack等のバンドラー経由)
-const { VoicevoxClient } = require("@kajidog/mcp-tts-voicevox");
-
-// クライアント初期化
-const client = new VoicevoxClient({
-  url: "http://localhost:50021",
-  defaultSpeaker: 1,
-});
-
-// 動作確認
-console.log("✅ Browser library loaded successfully");
-```
-
-## ブラウザ互換性
-
-- **Chrome, Firefox, Edge**: 完全対応
-- **Safari**: ファイルダウンロードに特殊対応あり
-
-## パフォーマンス最適化
-
-- **テキスト分割**: 長文は自動的に 150 文字以下に分割されます
-- **非同期処理**: 最初のセグメントを優先処理し、残りは非同期で処理
-- **キュー管理**: 複数のリクエストを効率的に管理
-- **プリフェッチ**: 次の音声を事前生成してスムーズな再生を実現
+4. **音声が再生されない**
+   - システムの音声出力デバイスを確認
+   - VOICEVOX エンジンの動作確認：
+     ```bash
+     curl -X POST "http://localhost:50021/audio_query?text=テスト&speaker=1"
+     ```
 
 ## ライセンス
 
