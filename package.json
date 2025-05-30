@@ -1,10 +1,20 @@
 {
   "name": "@kajidog/mcp-tts-voicevox",
-  "version": "0.0.12",
+  "version": "0.1.0",
   "description": "VOICEVOX integration for MCP - Text-to-Speech server using VOICEVOX engine",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
-  "browser": "./dist/index.browser.js",
+  "browser": {
+    "fs": false,
+    "path": false,
+    "os": false,
+    "sound-play": false,
+    "./src/stdio.ts": false,
+    "./dist/stdio.js": false,
+    "./src/sse.ts": false,
+    "./dist/sse.js": false,
+    "process": false
+  },
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
@@ -12,6 +22,18 @@
       "require": "./dist/index.js",
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./client": {
+      "browser": "./dist/client.js",
+      "require": "./dist/client.js",
+      "import": "./dist/client.js",
+      "types": "./dist/client.d.ts"
+    },
+    "./voicevox": {
+      "browser": "./dist/voicevox/index.js",
+      "require": "./dist/voicevox/index.js",
+      "import": "./dist/voicevox/index.js",
+      "types": "./dist/voicevox/index.d.ts"
     }
   },
   "bin": {
@@ -22,9 +44,18 @@
     "test": "jest",
     "test:sound": "ts-node src/test.ts",
     "start": "node dist/index.js",
+    "start:stdio": "node dist/stdio.js",
+    "start:http": "MCP_HTTP_MODE=true node dist/index.js",
+    "start:http:win": "powershell -Command \"$env:MCP_HTTP_MODE='true'; node dist/index.js\"",
+    "dev": "NODE_ENV=development ts-node src/index.ts",
+    "dev:stdio": "NODE_ENV=development ts-node src/stdio.ts",
+    "dev:http": "NODE_ENV=development MCP_HTTP_MODE=true ts-node src/index.ts",
+    "dev:http:win": "powershell -Command \"$env:NODE_ENV='development'; $env:MCP_HTTP_MODE='true'; ts-node src/index.ts\"",
     "build": "tsc && node scripts/fix-permissions.js",
+    "build:clean": "rm -rf dist && npm run build",
+    "lint": "tsc --noEmit",
     "prepare": "npm run build",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test && npm run lint"
   },
   "files": [
     "dist",
@@ -35,10 +66,9 @@
   "keywords": [
     "voicevox",
     "tts",
+    "text-to-speech",
     "mcp",
-    "mcp-server",
-    "browser",
-    "node"
+    "mcp-server"
   ],
   "author": {
     "name": "kajidog",
@@ -53,9 +83,15 @@
   },
   "homepage": "https://github.com/kajidog/mcp-tts-voicevox#readme",
   "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
+    "@hono/node-server": "^1.14.2",
     "@modelcontextprotocol/sdk": "^1.8.0",
     "axios": "^1.8.4",
+    "fetch-to-node": "^2.1.0",
+    "hono": "^4.7.10",
     "sound-play": "^1.1.0",
     "uuid": "^11.1.0",
     "zod": "^3.22.4"
@@ -69,26 +105,12 @@
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
   },
+  "peerDependencies": {
+    "typescript": ">=4.5.0"
+  },
   "browserslist": [
     "> 1%",
     "last 2 versions",
     "not dead"
-  ],
-  "browserify": {
-    "transform": [
-      "browserify-shim"
-    ]
-  },
-  "browserify-shim": {
-    "process": "global:process"
-  },
-  "browser": {
-    "fs": false,
-    "path": false,
-    "os": false,
-    "sound-play": false,
-    "./src/stdio.ts": false,
-    "./dist/stdio.js": false,
-    "process": false
-  }
+  ]
 }
