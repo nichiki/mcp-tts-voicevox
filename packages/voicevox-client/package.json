@@ -1,0 +1,86 @@
+{
+  "name": "@kajidog/voicevox-client",
+  "version": "0.0.1",
+  "description": "VOICEVOX client library for text-to-speech synthesis with queue management",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "browser": {
+    "fs": false,
+    "path": false,
+    "os": false,
+    "sound-play": false,
+    "process": false
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "browser": "./dist/index.js",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "type": "commonjs",
+  "scripts": {
+    "test": "jest",
+    "build": "tsc",
+    "build:clean": "rm -rf dist && npm run build",
+    "lint": "tsc --noEmit",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run lint"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "voicevox",
+    "tts",
+    "text-to-speech",
+    "audio",
+    "synthesis",
+    "queue"
+  ],
+  "author": {
+    "name": "kajidog",
+    "email": "dev@kajidog.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kajidog/mcp-tts-voicevox.git",
+    "directory": "packages/voicevox-client"
+  },
+  "bugs": {
+    "url": "https://github.com/kajidog/mcp-tts-voicevox/issues"
+  },
+  "homepage": "https://github.com/kajidog/mcp-tts-voicevox/tree/main/packages/voicevox-client#readme",
+  "license": "ISC",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.8.4",
+    "sound-play": "^1.1.0",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.0.0",
+    "@types/uuid": "^10.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.3.1",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "typescript": ">=4.5.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ]
+}

@@ -156,24 +156,7 @@ export interface Speaker {
   };
 }
 
-/**
- * VOICEVOXエラークラス
- */
-export class VoicevoxError extends Error {
-  /** ステータスコード */
-  statusCode: number;
-
-  /**
-   * VOICEVOXエラーを初期化する
-   * @param message エラーメッセージ
-   * @param statusCode ステータスコード
-   */
-  constructor(message: string, statusCode: number) {
-    super(message);
-    this.name = "VoicevoxError";
-    this.statusCode = statusCode;
-  }
-}
+// VoicevoxError は error.ts から再エクスポートされるため削除
 
 // 音声セグメント定義
 export interface SpeechSegment {

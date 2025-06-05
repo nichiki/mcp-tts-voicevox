@@ -1,6 +1,6 @@
 import axios, { AxiosRequestConfig } from "axios";
-import { AudioQuery, Speaker, VoicevoxError } from "./types";
-import { handleError } from "./error";
+import { AudioQuery, Speaker } from "./types";
+import { handleError, VoicevoxError, VoicevoxErrorCode } from "./error";
 
 export class VoicevoxApi {
   private readonly baseUrl: string;
@@ -147,7 +147,7 @@ export class VoicevoxApi {
       if (response.status !== 200) {
         throw new VoicevoxError(
           `APIリクエストに失敗しました: ${response.status}`,
-          response.status
+          VoicevoxErrorCode.API_CONNECTION_ERROR
         );
       }
 
@@ -156,7 +156,7 @@ export class VoicevoxApi {
       if (axios.isAxiosError(error)) {
         throw new VoicevoxError(
           `APIリクエストに失敗しました: ${error.message}`,
-          error.response?.status || 0
+          VoicevoxErrorCode.API_CONNECTION_ERROR
         );
       }
       throw error;

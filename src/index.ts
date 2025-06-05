@@ -1,9 +1,5 @@
 #!/usr/bin/env node
 // MCP TTS Voicevox エントリーポイント
-// ライブラリとしても使用できるように、クライアントとCLIのエントリーポイントを分離
-
-// ライブラリとして使用する場合のエクスポート
-export * from "./client";
 
 // 型定義
 interface ServerConfig {
@@ -22,13 +18,6 @@ interface ServerInfo {
  * 実行環境を判定するユーティリティ
  */
 class EnvironmentDetector {
-  /** ブラウザ環境かどうかを判定 */
-  static isBrowser(): boolean {
-    return (
-      typeof window !== "undefined" && typeof window.document !== "undefined"
-    );
-  }
-
   /** Node.js環境かどうかを判定 */
   static isNodejs(): boolean {
     return typeof process !== "undefined" && !!process.versions?.node;
@@ -187,11 +176,6 @@ class StdioServerManager {
 class MCPServerManager {
   static async start(): Promise<void> {
     // 環境チェック
-    if (EnvironmentDetector.isBrowser()) {
-      console.warn("⚠️ MCP server cannot run in browser environment");
-      return;
-    }
-
     if (!EnvironmentDetector.isNodejs()) {
       throw new Error("❌ Node.js environment required");
     }
