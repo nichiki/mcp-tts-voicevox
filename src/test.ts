@@ -1,4 +1,4 @@
-import { VoicevoxClient, AudioQuery } from "./voicevox";
+import { VoicevoxClient, AudioQuery } from "@kajidog/voicevox-client";
 import { join } from "path";
 import { tmpdir } from "os";
 import * as fs from "fs/promises";

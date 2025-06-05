@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { VoicevoxClient, AudioQuery } from "./voicevox";
+import { VoicevoxClient, AudioQuery } from "@kajidog/voicevox-client";
 
 // 型定義
 const TextSegmentSchema = z.object({

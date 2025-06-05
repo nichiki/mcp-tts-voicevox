@@ -4,36 +4,17 @@
   "description": "VOICEVOX integration for MCP - Text-to-Speech server using VOICEVOX engine",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
-  "browser": {
-    "fs": false,
-    "path": false,
-    "os": false,
-    "sound-play": false,
-    "./src/stdio.ts": false,
-    "./dist/stdio.js": false,
-    "./src/sse.ts": false,
-    "./dist/sse.js": false,
-    "process": false
-  },
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "browser": "./dist/index.browser.js",
       "require": "./dist/index.js",
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
     "./client": {
-      "browser": "./dist/client.js",
       "require": "./dist/client.js",
       "import": "./dist/client.js",
       "types": "./dist/client.d.ts"
-    },
-    "./voicevox": {
-      "browser": "./dist/voicevox/index.js",
-      "require": "./dist/voicevox/index.js",
-      "import": "./dist/voicevox/index.js",
-      "types": "./dist/voicevox/index.d.ts"
     }
   },
   "bin": {
@@ -88,18 +69,15 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.14.2",
+    "@kajidog/voicevox-client": "^0.0.1",
     "@modelcontextprotocol/sdk": "^1.8.0",
-    "axios": "^1.8.4",
     "fetch-to-node": "^2.1.0",
     "hono": "^4.7.10",
-    "sound-play": "^1.1.0",
-    "uuid": "^11.1.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "^20.0.0",
-    "@types/uuid": "^10.0.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.3.1",
     "ts-node": "^10.9.0",
@@ -107,10 +85,5 @@
   },
   "peerDependencies": {
     "typescript": ">=4.5.0"
-  },
-  "browserslist": [
-    "> 1%",
-    "last 2 versions",
-    "not dead"
-  ]
+  }
 }
