@@ -7,30 +7,6 @@ const path = require('path');
 
 // ターゲットファイルのパス
 const indexJsPath = path.join(__dirname, '..', 'dist', 'index.js');
-const browserIndexJsPath = path.join(__dirname, '..', 'dist', 'index.browser.js');
-
-// index.browser.jsファイルがなければ作成する
-function ensureBrowserFile() {
-    try {
-        if (!fs.existsSync(browserIndexJsPath)) {
-            // ブラウザ用のindex.browser.jsが存在しない場合
-            // index.browser.tsからビルドされたファイルがない場合、
-            // 単純に必要なexportsだけのファイルを作成
-            const browserContent =
-                `// Auto-generated browser compatible file
-// MCP TTS Voicevox ブラウザエントリーポイント
-export * from "./client";
-// ログ出力は削除
-`;
-            fs.writeFileSync(browserIndexJsPath, browserContent, 'utf8');
-            console.log(`${browserIndexJsPath} を作成しました`);
-        } else {
-            console.log(`${browserIndexJsPath} は既に存在します`);
-        }
-    } catch (error) {
-        console.warn(`ブラウザファイル作成中にエラーが発生しました: ${error.message}`);
-    }
-}
 
 try {
     // distディレクトリが存在するか確認
@@ -43,9 +19,7 @@ try {
     // index.jsファイルが存在するか確認
     if (!fs.existsSync(indexJsPath)) {
         console.log(`${indexJsPath} が見つかりません。ビルドが完了していない可能性があります。`);
-        // エラーで終了せず、ブラウザファイルの処理だけ行う
-        ensureBrowserFile();
-        console.log('パーミッション修正を部分的に完了しました');
+        console.log('パーミッション修正をスキップします');
         process.exit(0);
     }
 
@@ -73,9 +47,6 @@ try {
     } else {
         console.log('Windowsでは実行権限の設定はスキップされます');
     }
-
-    // ブラウザ用ファイルの処理
-    ensureBrowserFile();
 
     console.log('パーミッション修正が完了しました');
 } catch (error) {
