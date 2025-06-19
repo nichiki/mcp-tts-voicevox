@@ -12,9 +12,9 @@ const TextSegmentSchema = z.object({
 });
 
 const TextInputSchema = z
-  .union([z.array(z.string()), z.array(TextSegmentSchema)])
+  .union([z.string(), z.array(z.string()), z.array(TextSegmentSchema)])
   .describe(
-    'Array of strings ["Hello", "World"] or objects [{"text": "Hello"}, {"text": "World", "speaker": 3}] for individual speaker control. For faster playback start, make the first element short.'
+    'JSON-encoded array string like \'["Hello", "World"]\' or direct array ["Hello", "World"] or objects [{"text": "Hello"}, {"text": "World", "speaker": 3}] for individual speaker control. When passing as string, it MUST be valid JSON. For faster playback start, make the first element short.'
   );
 
 const CommonParametersSchema = {
@@ -94,6 +94,19 @@ server.tool(
   },
   async ({ text, speaker, query, speedScale }) => {
     try {
+      // textが文字列として渡された場合、JSONパースを試みる
+      let parsedText: string[] | Array<{ text: string; speaker?: number }>;
+      if (typeof text === 'string') {
+        try {
+          parsedText = JSON.parse(text);
+        } catch (e) {
+          // パース失敗時はエラーを投げる
+          throw new Error('Invalid text format: expected array but received string that could not be parsed as JSON');
+        }
+      } else {
+        parsedText = text;
+      }
+
       if (query) {
         const audioQuery = parseAudioQuery(query, speedScale);
         const result = await voicevoxClient.enqueueAudioGeneration(
@@ -103,7 +116,7 @@ server.tool(
         return createSuccessResponse(result);
       }
 
-      const result = await processTextInput(text, speaker, speedScale);
+      const result = await processTextInput(parsedText, speaker, speedScale);
       return createSuccessResponse(result);
     } catch (error) {
       return createErrorResponse(error);
